@@ -14,6 +14,10 @@ const chemistRoutes = require('./chemist.routes');
 const retailerRoutes = require('./retailer.routes');
 const doctorRoutes = require('./doctor.routes');
 const appointmentRoutes = require('./appointment.routes');
+const shopRoutes = require('./shop.routes');
+const cartRoutes = require('./cart.routes');
+const orderRoutes = require('./order.routes');
+const paymentRoutes = require('./payment.routes');
 
 const router = express.Router();
 
@@ -32,5 +36,9 @@ router.use('/chemists', chemistRoutes);
 router.use('/retailer', retailerRoutes);
 router.use('/doctors', doctorRoutes);
 router.use('/appointments', appointmentRoutes);
+router.use('/shop', shopRoutes);
+router.use('/cart', cartRoutes);
+router.use('/orders', orderRoutes);
+router.use('/payments', paymentRoutes);
 
 module.exports = router;
