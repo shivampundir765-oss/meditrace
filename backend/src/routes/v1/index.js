@@ -12,6 +12,8 @@ const notificationRoutes = require('./notification.routes');
 const scanRoutes = require('./scan.routes');
 const chemistRoutes = require('./chemist.routes');
 const retailerRoutes = require('./retailer.routes');
+const doctorRoutes = require('./doctor.routes');
+const appointmentRoutes = require('./appointment.routes');
 
 const router = express.Router();
 
@@ -28,5 +30,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/scan', scanRoutes);
 router.use('/chemists', chemistRoutes);
 router.use('/retailer', retailerRoutes);
+router.use('/doctors', doctorRoutes);
+router.use('/appointments', appointmentRoutes);
 
 module.exports = router;
