@@ -1,6 +1,7 @@
 const app = require('./app');
 const env = require('./config/env');
 const { connectDB, disconnectDB } = require('./config/db');
+const { initCronJobs } = require('./services/cron.service');
 const logger = require('./utils/logger');
 
 let server;
@@ -8,6 +9,9 @@ let server;
 const startServer = async () => {
   try {
     await connectDB();
+    if (env.NODE_ENV !== 'test') {
+      initCronJobs();
+    }
 
     server = app.listen(env.PORT, () => {
       logger.info(`===================================================`);

@@ -76,10 +76,17 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false
     },
+    deviceTokens: {
+      type: [String],
+      default: []
+    },
     notificationSettings: {
       push: { type: Boolean, default: true },
       email: { type: Boolean, default: true },
       inApp: { type: Boolean, default: true },
+      doseAlerts: { type: Boolean, default: true },
+      lowStockAlerts: { type: Boolean, default: true },
+      expiryAlerts: { type: Boolean, default: true },
       quietHoursStart: { type: String, default: null }, // "22:00"
       quietHoursEnd: { type: String, default: null }     // "07:00"
     }
