@@ -9,6 +9,7 @@ const scheduleRoutes = require('./schedule.routes');
 const doseRoutes = require('./dose.routes');
 const stockRoutes = require('./stock.routes');
 const notificationRoutes = require('./notification.routes');
+const scanRoutes = require('./scan.routes');
 
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.use('/schedule', scheduleRoutes);
 router.use('/doses', doseRoutes);
 router.use('/stock', stockRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/scan', scanRoutes);
 
 module.exports = router;
