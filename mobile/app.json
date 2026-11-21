@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Meditrace",
+    "slug": "meditrace-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0d9488"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.meditrace.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d9488"
+      },
+      "package": "com.meditrace.mobile",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "extra": {
+      "apiUrl": "http://localhost:5000/api/v1"
+    }
+  }
+}
