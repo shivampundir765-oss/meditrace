@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: meditrace-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: meditrace_admin
+      MONGO_INITDB_ROOT_PASSWORD: meditrace_password
+      MONGO_INITDB_DATABASE: meditrace
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - meditrace-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meditrace-backend
+    restart: always
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      MONGODB_URI: mongodb://meditrace_admin:meditrace_password@mongodb:27017/meditrace?authSource=admin
+      JWT_ACCESS_SECRET: dev_jwt_access_secret_key_12345
+      JWT_REFRESH_SECRET: dev_jwt_refresh_secret_key_67890
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - meditrace-network
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: meditrace-web
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    networks:
+      - meditrace-network
+
+volumes:
+  mongo_data:
+
+networks:
+  meditrace-network:
+    driver: bridge

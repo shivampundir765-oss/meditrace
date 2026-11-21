@@ -1,0 +1,29 @@
+{
+  "name": "meditrace-monorepo",
+  "version": "1.0.0",
+  "description": "Meditrace - Comprehensive Medicine Management Platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "test": "npm --prefix backend test",
+    "lint": "npm --prefix backend run lint",
+    "backend": "npm --prefix backend run dev",
+    "web": "npm --prefix web run dev",
+    "mobile": "npm --prefix mobile start"
+  },
+  "keywords": [
+    "medicine-tracker",
+    "health-tech",
+    "react",
+    "react-native",
+    "nodejs",
+    "express",
+    "mongodb"
+  ],
+  "author": "Meditrace Team",
+  "license": "MIT"
+}
