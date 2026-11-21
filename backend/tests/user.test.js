@@ -32,7 +32,6 @@ beforeEach(async () => {
   await User.deleteMany({});
   const tokens = await registerAndGetTokens(testUser);
   accessToken = tokens.accessToken;
-  refreshToken = tokens.refreshToken;
 });
 
 describe('User Profile Routes', () => {

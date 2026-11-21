@@ -84,7 +84,8 @@ describe('Auth Routes', () => {
     });
 
     it('should reject missing name', async () => {
-      const { name: _name, ...noName } = testUser;
+      const noName = { ...testUser };
+      delete noName.name;
       const res = await request(app)
         .post('/api/v1/auth/register')
         .send(noName);
