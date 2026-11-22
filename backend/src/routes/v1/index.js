@@ -20,7 +20,6 @@ const orderRoutes = require('./order.routes');
 const paymentRoutes = require('./payment.routes');
 const abdmRoutes = require('./abdm.routes');
 const placesRoutes = require('./places.routes');
-const catalogRoutes = require('./catalog.routes');
 const cabinetRoutes = require('./cabinet.routes');
 const profileRoutes = require('./profile.routes');
 const chatbotRoutes = require('./chatbot.routes');

@@ -1,9 +1,7 @@
 const { Medicine } = require('../models/medicine.model');
 const { Profile } = require('../models/profile.model');
 const { DoseSchedule } = require('../models/doseSchedule.model');
-const { DoseLog } = require('../models/doseLog.model');
 const { CabinetMedicine } = require('../models/cabinetMedicine.model');
-const { Cabinet } = require('../models/cabinet.model');
 const { defaultDrugProvider } = require('./drugProvider');
 const revisionService = require('./revision.service');
 const { generateDoseLogsForDate } = require('./schedule.service');
@@ -192,7 +190,9 @@ const createMedicine = async (patientId, profileId, data, editorUser = null, loc
         },
         { upsert: true, new: true }
       );
-    } catch (_e) {}
+    } catch (_e) {
+      // non-critical cabinet mapping link
+    }
   }
 
   // 3. Handle mealSlots / schedule creation if provided

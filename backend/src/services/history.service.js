@@ -11,7 +11,7 @@ class HistoryService {
    * @param {string} patientId 
    * @param {Object} options 
    */
-  async getAdherenceHistory(patientId, { days = 7, catalogId = null } = {}) {
+  async getAdherenceHistory(patientId, { days = 7, catalogId = null, cabinetId = null, profileId = null } = {}) {
     const numDays = Math.min(Math.max(parseInt(days, 10) || 7, 1), 30);
     const now = new Date();
 
@@ -54,11 +54,12 @@ class HistoryService {
     const medicineQuery = { patient_id: patientId, status: { $ne: 'discontinued' } };
     const medicines = await Medicine.find(medicineQuery).sort({ name: 1 }).lean();
 
-    // Filter by catalogId if provided
+    // Filter by cabinetId or catalogId if provided
     let filteredMedicines = medicines;
-    if (catalogId) {
-      const allowedMedIds = catalogMedicines
-        .filter(cm => String(cm.catalog_id) === String(catalogId))
+    const targetCabId = cabinetId || catalogId;
+    if (targetCabId) {
+      const allowedMedIds = cabinetMedicines
+        .filter(cm => String(cm.cabinet_id || cm.catalog_id) === String(targetCabId))
         .map(cm => String(cm.medicine_id));
       filteredMedicines = medicines.filter(m => allowedMedIds.includes(String(m._id)));
     }
@@ -292,7 +293,6 @@ class HistoryService {
 
     const days = dates.map((dateStr, index) => {
       const dayNum = index + 1;
-      const dayDate = new Date(dateStr);
 
       const dayLogs = logs.filter((l) => {
         const lStr = new Date(l.scheduled_time).toISOString().split('T')[0];

@@ -64,12 +64,12 @@ class OpenFdaAdapter extends DrugInfoProvider {
     }
   }
 
-  async lookupByBarcode(barcode = '') {
+  async lookupByBarcode(_barcode = '') {
     // OpenFDA does not have a reliable global UPC index for all Indian barcodes
     return null;
   }
 
-  async search(query = '', options = {}) {
+  async search(query = '', _options = {}) {
     const res = await this.lookupByName(query);
     return res ? [res] : [];
   }

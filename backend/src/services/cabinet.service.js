@@ -227,6 +227,9 @@ class CabinetService {
 
   async getCabinetById(userId, cabinetId, profileId = null) {
     const filter = { _id: cabinetId, user_id: userId };
+    if (profileId) {
+      filter.$or = [{ profile_id: profileId }, { profile_id: null }];
+    }
     const cab = await Cabinet.findOne(filter).lean();
     if (!cab) throw new Error('Cabinet not found');
 

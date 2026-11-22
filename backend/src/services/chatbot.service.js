@@ -3,7 +3,6 @@ const { Cabinet } = require('../models/cabinet.model');
 const { CabinetMedicine } = require('../models/cabinetMedicine.model');
 const { Medicine } = require('../models/medicine.model');
 const { DoseSchedule } = require('../models/doseSchedule.model');
-const { DoseLog } = require('../models/doseLog.model');
 const cabinetService = require('./cabinet.service');
 const historyService = require('./history.service');
 

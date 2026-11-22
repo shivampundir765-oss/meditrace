@@ -24,12 +24,12 @@ export default function HomePage() {
     try {
       setLoading(true);
       const [catRes, schedRes, histRes] = await Promise.all([
-        api.get('/catalogs').catch(() => ({ data: [] })),
+        api.get('/cabinets').catch(() => api.get('/catalogs')).catch(() => ({ data: [] })),
         api.get('/schedule/today').catch(() => ({ data: null })),
         api.get('/history?days=7').catch(() => ({ data: null }))
       ]);
 
-      const catData = catRes.data?.data || catRes.data;
+      const catData = catRes.data?.cabinets || catRes.data?.data || catRes.data;
       if (Array.isArray(catData)) setCatalogs(catData);
 
       const schedData = schedRes.data?.data || schedRes.data;

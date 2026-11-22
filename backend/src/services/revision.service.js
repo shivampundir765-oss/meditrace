@@ -1,5 +1,4 @@
 const { MedicineRevision } = require('../models/medicineRevision.model');
-const { Medicine } = require('../models/medicine.model');
 const { createAuditStamp } = require('../utils/auditStamp');
 
 class RevisionService {

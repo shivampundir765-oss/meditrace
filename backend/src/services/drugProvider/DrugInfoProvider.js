@@ -10,7 +10,7 @@ class DrugInfoProvider {
    * @param {string} [salt]
    * @returns {Promise<Object|null>} Canonical medicine info or null
    */
-  async lookupByName(name, salt = '') {
+  async lookupByName(_name, _salt = '') {
     throw new Error('Method lookupByName() must be implemented');
   }
 
@@ -19,7 +19,7 @@ class DrugInfoProvider {
    * @param {string} barcode
    * @returns {Promise<Object|null>} Canonical medicine info or null
    */
-  async lookupByBarcode(barcode) {
+  async lookupByBarcode(_barcode) {
     throw new Error('Method lookupByBarcode() must be implemented');
   }
 
@@ -29,7 +29,7 @@ class DrugInfoProvider {
    * @param {Object} [options]
    * @returns {Promise<Array<Object>>}
    */
-  async search(query, options = {}) {
+  async search(_query, _options = {}) {
     throw new Error('Method search() must be implemented');
   }
 }

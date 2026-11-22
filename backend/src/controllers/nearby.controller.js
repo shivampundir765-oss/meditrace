@@ -48,7 +48,9 @@ exports.getNearbyChemists = async (req, res, next) => {
         is_verified: true,
         is_active: true
       }).lean();
-    } catch (_e) {}
+    } catch (_e) {
+      registeredRetailers = [];
+    }
 
     const mappedRetailers = registeredRetailers.map(r => {
       const coords = r.location?.coordinates || [77.5946, 12.9716];

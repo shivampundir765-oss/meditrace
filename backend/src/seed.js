@@ -190,7 +190,7 @@ async function runSeed(mongoUri) {
     ]
   });
 
-  const profileMother = await Profile.create({
+  await Profile.create({
     user_id: patient1._id,
     name: 'Sunita Rao (Mother)',
     relationship: 'mother',
@@ -202,7 +202,7 @@ async function runSeed(mongoUri) {
     chronic_conditions: ['Hypothyroidism']
   });
 
-  const profileChild = await Profile.create({
+  await Profile.create({
     user_id: patient1._id,
     name: 'Aarav Rao (Son)',
     relationship: 'child',
@@ -261,7 +261,7 @@ async function runSeed(mongoUri) {
     audit_stamp: auditStamp
   });
 
-  const cabVitamins = await Cabinet.create({
+  await Cabinet.create({
     user_id: patient1._id,
     profile_id: profileSelf._id,
     name: 'Daily Vitamins & Health',

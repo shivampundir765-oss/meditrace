@@ -27,7 +27,9 @@ const ensureFacilitiesSeeded = async () => {
     if (count === 0) {
       await Facility.insertMany(HEALTHCARE_FACILITIES);
     }
-  } catch (_e) {}
+  } catch (_e) {
+    // Non-blocking seeding error
+  }
 };
 
 /**

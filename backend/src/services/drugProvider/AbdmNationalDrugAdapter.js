@@ -165,7 +165,9 @@ class AbdmNationalDrugAdapter extends DrugInfoProvider {
     try {
       const doc = await AbdmDrug.findOne({ barcodes: clean }).lean();
       if (doc) return this._formatAbdmEntry(doc);
-    } catch (err) {}
+    } catch (_err) {
+      // fallback to static list
+    }
 
     // Check static list
     const staticMatch = ABDM_REGISTRY_ENTRIES.find(
@@ -198,7 +200,9 @@ class AbdmNationalDrugAdapter extends DrugInfoProvider {
       if (docs && docs.length > 0) {
         return docs.map((d) => this._formatAbdmEntry(d));
       }
-    } catch (e) {}
+    } catch (_e) {
+      // fallback to static list
+    }
 
     const matchedStatic = ABDM_REGISTRY_ENTRIES.filter(
       (e) =>
