@@ -12,12 +12,18 @@ const { Order } = require('./models/order.model');
 const { Notification } = require('./models/notification.model');
 const { Catalog } = require('./models/catalog.model');
 const { CatalogMedicine } = require('./models/catalogMedicine.model');
+const { Cabinet } = require('./models/cabinet.model');
+const { CabinetMedicine } = require('./models/cabinetMedicine.model');
+const { Profile } = require('./models/profile.model');
+const { MedicineRevision } = require('./models/medicineRevision.model');
+const { ChatMessage } = require('./models/chatMessage.model');
 const { Facility } = require('./models/facility.model');
 const { HEALTHCARE_FACILITIES } = require('./data/facilityData');
+const { createAuditStamp } = require('./utils/auditStamp');
 
 async function runSeed(mongoUri) {
   const uri = mongoUri || env.MONGODB_URI || 'mongodb://localhost:27017/meditrace';
-  console.log(`Connecting to MongoDB for seed at: ${uri}`);
+  console.log(`Connecting to MongoDB for v3 seed at: ${uri}`);
 
   if (mongoose.connection.readyState === 0) {
     await mongoose.connect(uri);
@@ -29,6 +35,7 @@ async function runSeed(mongoUri) {
       'admin@meditrace.com',
       'patient@meditrace.com',
       'sarah.patient@meditrace.com',
+      'pharmacist.sharma@meditrace.com',
       'dr.sharma@meditrace.com',
       'dr.priya@meditrace.com',
       'apollo.indiranagar@meditrace.com',
@@ -44,10 +51,15 @@ async function runSeed(mongoUri) {
     Order.deleteMany({}),
     Notification.deleteMany({}),
     Catalog.deleteMany({}),
-    CatalogMedicine.deleteMany({})
+    CatalogMedicine.deleteMany({}),
+    Cabinet.deleteMany({}),
+    CabinetMedicine.deleteMany({}),
+    Profile.deleteMany({}),
+    MedicineRevision.deleteMany({}),
+    ChatMessage.deleteMany({})
   ]);
 
-  console.log('--- Seeding Platform Users ---');
+  console.log('--- Seeding Platform Users (Roles: Admin, Doctor, Pharmacist, Patient) ---');
   const defaultPassword = 'Password123!';
 
   // 1. Admin User
@@ -56,10 +68,55 @@ async function runSeed(mongoUri) {
     email: 'admin@meditrace.com',
     password: defaultPassword,
     role: 'admin',
-    phone: '+91 80 1234 5678'
+    phone: '+91 80 1234 5678',
+    preferred_language: 'en'
   });
 
-  // 2. Patient Users
+  // 2. Pharmacist User
+  const pharmacist = await User.create({
+    name: 'Vikram Sharma (R.Ph.)',
+    email: 'pharmacist.sharma@meditrace.com',
+    password: defaultPassword,
+    role: 'pharmacist',
+    phone: '+91 98450 11223',
+    pharmacy_name: 'Apollo Pharmacy Indiranagar',
+    license_number: 'KA-DRG-2024-88912',
+    preferred_language: 'en'
+  });
+
+  // 3. Doctor User
+  const doctorUser = await User.create({
+    name: 'Dr. Ramesh Sharma, MD',
+    email: 'dr.sharma@meditrace.com',
+    password: defaultPassword,
+    role: 'doctor',
+    phone: '+91 98450 99887',
+    preferred_language: 'en'
+  });
+
+  await Doctor.create({
+    user_id: doctorUser._id,
+    name: 'Dr. Ramesh Sharma, MD',
+    specialization: 'Cardiologist',
+    experience_years: 15,
+    qualification: 'MBBS, MD (Cardiology), FACC',
+    registration_number: 'KMC-54321',
+    clinic_address: {
+      clinic_name: 'Apollo Clinic & Heart Center',
+      street: '100ft Road, Indiranagar',
+      city: 'Bangalore',
+      state: 'Karnataka',
+      zipCode: '560038'
+    },
+    fee: 800,
+    available_days: [1, 3, 5],
+    available_time_slots: [
+      { start_time: '09:00', end_time: '13:00' },
+      { start_time: '14:00', end_time: '18:00' }
+    ]
+  });
+
+  // 4. Primary Patient User
   const patient1 = await User.create({
     name: 'Arjun Rao',
     email: 'patient@meditrace.com',
@@ -68,6 +125,15 @@ async function runSeed(mongoUri) {
     phone: '+91 98765 43210',
     gender: 'male',
     dateOfBirth: new Date('1990-05-15'),
+    preferred_language: 'en',
+    notificationSettings: {
+      pushNotifications: true,
+      doseAlerts: true,
+      lowStockAlerts: true,
+      expiryAlerts: true,
+      quietHoursStart: '23:00',
+      quietHoursEnd: '07:00'
+    },
     address: {
       street: '42 MG Road, Ashok Nagar',
       city: 'Bangalore',
@@ -83,324 +149,412 @@ async function runSeed(mongoUri) {
     }
   });
 
-  await User.create({
+  // 5. Secondary Patient User (Caregiver)
+  const patient2 = await User.create({
     name: 'Sarah Khan',
     email: 'sarah.patient@meditrace.com',
     password: defaultPassword,
     role: 'patient',
-    phone: '+91 98765 43211',
+    phone: '+91 98765 88990',
     gender: 'female',
-    address: {
-      street: '12 Indiranagar 100ft Rd',
-      city: 'Bangalore',
-      state: 'Karnataka',
-      zipCode: '560038',
-      country: 'India'
-    }
+    dateOfBirth: new Date('1992-08-20'),
+    preferred_language: 'hi'
   });
 
-  // 3. Doctors
-  const doctorUser1 = await User.create({
-    name: 'Dr. Ramesh Sharma',
-    email: 'dr.sharma@meditrace.com',
-    password: defaultPassword,
-    role: 'doctor',
-    phone: '+91 80 4455 6677'
-  });
-
-  const doctorUser2 = await User.create({
-    name: 'Dr. Priya Patel',
-    email: 'dr.priya@meditrace.com',
-    password: defaultPassword,
-    role: 'doctor',
-    phone: '+91 80 5566 7788'
-  });
-
-  await Doctor.create([
-    {
-      user_id: doctorUser1._id,
-      name: doctorUser1.name,
-      specialization: 'Cardiologist',
-      qualification: 'MBBS, MD (Cardiology), FACC',
-      experience_years: 15,
-      clinic_address: {
-        clinic_name: 'Apex Heart & Vascular Clinic',
-        street: '100ft Road, Indiranagar',
-        city: 'Bangalore',
-        state: 'Karnataka',
-        zipCode: '560038'
-      },
-      fee: 700,
-      available_days: [1, 2, 3, 4, 5],
-      available_time_slots: [
-        { start_time: '09:00', end_time: '13:00' },
-        { start_time: '14:00', end_time: '17:00' }
-      ],
-      slot_duration_minutes: 30
-    },
-    {
-      user_id: doctorUser2._id,
-      name: doctorUser2.name,
-      specialization: 'Dermatologist',
-      qualification: 'MBBS, DVD, MD (Dermatology)',
-      experience_years: 10,
-      clinic_address: {
-        clinic_name: 'Skin & Aesthetics Care',
-        street: '80ft Road, 4th Block, Koramangala',
-        city: 'Bangalore',
-        state: 'Karnataka',
-        zipCode: '560034'
-      },
-      fee: 500,
-      available_days: [2, 3, 4, 5, 6],
-      available_time_slots: [
-        { start_time: '10:00', end_time: '14:00' },
-        { start_time: '15:00', end_time: '18:00' }
-      ],
-      slot_duration_minutes: 30
-    }
-  ]);
-
-  // 4. Retailers
-  const retailerUser1 = await User.create({
-    name: 'Apollo Pharmacy Indiranagar',
-    email: 'apollo.indiranagar@meditrace.com',
-    password: defaultPassword,
-    role: 'retailer',
-    phone: '+91 80 2525 1122'
-  });
-
-  const retailerUser2 = await User.create({
-    name: 'MedPlus Pharmacy Koramangala',
-    email: 'medplus.koramangala@meditrace.com',
-    password: defaultPassword,
-    role: 'retailer',
-    phone: '+91 80 4141 3344'
-  });
-
-  const retailer1 = await Retailer.create({
-    user_id: retailerUser1._id,
-    store_name: 'Apollo Pharmacy Indiranagar',
-    shop_name: 'Apollo Pharmacy Indiranagar',
-    licence_number: 'KA-BLR-2024-9988',
-    phone: '+91 80 2525 1122',
-    email: 'apollo.indiranagar@meditrace.com',
-    opening_hours: '24 Hours Open',
-    is_verified: true,
-    is_active: true,
-    location: {
-      type: 'Point',
-      coordinates: [77.6408, 12.9784]
-    },
-    address: {
-      street: '12th Main, HAL 2nd Stage, Indiranagar',
-      city: 'Bangalore',
-      state: 'Karnataka',
-      pincode: '560038'
-    }
-  });
-
-  const retailer2 = await Retailer.create({
-    user_id: retailerUser2._id,
-    store_name: 'MedPlus Pharmacy Koramangala',
-    shop_name: 'MedPlus Pharmacy Koramangala',
-    licence_number: 'KA-BLR-2024-1122',
-    phone: '+91 80 4141 3344',
-    email: 'medplus.koramangala@meditrace.com',
-    opening_hours: '08:00 AM - 11:00 PM',
-    is_verified: true,
-    is_active: true,
-    location: {
-      type: 'Point',
-      coordinates: [77.6271, 12.9352]
-    },
-    address: {
-      street: '5th Block, Koramangala',
-      city: 'Bangalore',
-      state: 'Karnataka',
-      pincode: '560034'
-    }
-  });
-
-  console.log('--- Seeding Retailer Inventories ---');
-  await RetailerInventory.create([
-    {
-      retailer_id: retailer1._id,
-      medicine_name: 'Dolo 650',
-      generic_name: 'Paracetamol',
-      salt_composition: 'Paracetamol 650mg',
-      dosage_form: 'tablet',
-      strength: '650mg',
-      manufacturer: 'Micro Labs Ltd.',
-      batch_number: 'B240918',
-      expiry_date: new Date('2027-04-30'),
-      price: 32.50,
-      mrp: 35.00,
-      quantity_in_stock: 250,
-      requires_prescription: false
-    },
-    {
-      retailer_id: retailer1._id,
-      medicine_name: 'Augmentin 625 Duo',
-      generic_name: 'Amoxicillin with Clavulanic Acid',
-      salt_composition: 'Amoxicillin 500mg + Clavulanic Acid 125mg',
-      dosage_form: 'tablet',
-      strength: '625mg',
-      manufacturer: 'GlaxoSmithKline',
-      batch_number: 'AUG-8812',
-      expiry_date: new Date('2026-11-30'),
-      price: 185.00,
-      mrp: 205.00,
-      quantity_in_stock: 80,
-      requires_prescription: true
-    },
-    {
-      retailer_id: retailer2._id,
-      medicine_name: 'Azithral 500',
-      generic_name: 'Azithromycin',
-      salt_composition: 'Azithromycin 500mg',
-      dosage_form: 'tablet',
-      strength: '500mg',
-      manufacturer: 'Alembic Pharmaceuticals',
-      batch_number: 'AZT-402',
-      expiry_date: new Date('2027-02-28'),
-      price: 119.00,
-      mrp: 135.00,
-      quantity_in_stock: 120,
-      requires_prescription: true
-    }
-  ]);
-
-  console.log('--- Seeding Patient Catalogs ---');
-  const catMorning = await Catalog.create({
+  console.log('--- Seeding Multi-Profile & Family Mode ---');
+  // Patient 1 Profiles
+  const profileSelf = await Profile.create({
     user_id: patient1._id,
-    name: 'Morning Routine',
+    name: 'Arjun Rao (Self)',
+    relationship: 'self',
+    is_default: true,
+    gender: 'male',
+    date_of_birth: new Date('1990-05-15'),
+    blood_group: 'O+',
+    allergies: ['Penicillin'],
+    chronic_conditions: ['Hypertension']
+  });
+
+  const profileFather = await Profile.create({
+    user_id: patient1._id,
+    name: 'Ramesh Rao (Father)',
+    relationship: 'father',
+    is_default: false,
+    gender: 'male',
+    date_of_birth: new Date('1956-02-10'),
+    blood_group: 'O+',
+    allergies: [],
+    chronic_conditions: ['Type 2 Diabetes', 'Hypertension'],
+    authorized_caregivers: [
+      { user_id: patient2._id, access_level: 'caregiver_edit' }
+    ]
+  });
+
+  const profileMother = await Profile.create({
+    user_id: patient1._id,
+    name: 'Sunita Rao (Mother)',
+    relationship: 'mother',
+    is_default: false,
+    gender: 'female',
+    date_of_birth: new Date('1960-07-22'),
+    blood_group: 'A+',
+    allergies: ['Sulfa drugs'],
+    chronic_conditions: ['Hypothyroidism']
+  });
+
+  const profileChild = await Profile.create({
+    user_id: patient1._id,
+    name: 'Aarav Rao (Son)',
+    relationship: 'child',
+    is_default: false,
+    gender: 'male',
+    date_of_birth: new Date('2018-11-12'),
+    blood_group: 'O+',
+    allergies: [],
+    chronic_conditions: []
+  });
+
+  console.log('--- Seeding Cabinets & Catalogs ---');
+  const demoLocation = {
+    latitude: 12.9716,
+    longitude: 77.5946,
+    place_name: 'Bangalore Central, Karnataka, India'
+  };
+  const auditStamp = createAuditStamp(demoLocation);
+
+  const cabCold = await Cabinet.create({
+    user_id: patient1._id,
+    profile_id: profileSelf._id,
+    name: 'Cold & Cough',
+    condition: 'Cold',
     time_slot: 'Morning',
     reminder_time: '08:00',
     color: '#0d9488',
-    is_default: true
+    icon: 'snowflake',
+    is_default: true,
+    audit_stamp: auditStamp
   });
 
-  const catAfternoon = await Catalog.create({
+  const cabFever = await Cabinet.create({
     user_id: patient1._id,
-    name: 'Afternoon Dose',
+    profile_id: profileSelf._id,
+    name: 'Fever & Pain Relief',
+    condition: 'Fever',
     time_slot: 'Afternoon',
     reminder_time: '13:00',
     color: '#0284c7',
-    is_default: true
+    icon: 'thermometer',
+    is_default: true,
+    audit_stamp: auditStamp
   });
 
-  const catEvening = await Catalog.create({
+  const cabDiabetes = await Cabinet.create({
     user_id: patient1._id,
-    name: 'Evening Care',
-    time_slot: 'Evening',
-    reminder_time: '20:00',
-    color: '#f59e0b',
-    is_default: true
+    profile_id: profileFather._id,
+    name: 'Diabetes & BP Care',
+    condition: 'Diabetes',
+    time_slot: 'Morning',
+    reminder_time: '08:30',
+    color: '#e11d48',
+    icon: 'heart-pulse',
+    is_default: true,
+    audit_stamp: auditStamp
   });
 
-  const catNight = await Catalog.create({
+  const cabVitamins = await Cabinet.create({
     user_id: patient1._id,
-    name: 'Night Rest',
+    profile_id: profileSelf._id,
+    name: 'Daily Vitamins & Health',
+    condition: 'General Health',
+    time_slot: 'Morning',
+    reminder_time: '08:30',
+    color: '#10b981',
+    icon: 'pill',
+    is_default: true,
+    audit_stamp: auditStamp
+  });
+
+  const cabNight = await Cabinet.create({
+    user_id: patient1._id,
+    profile_id: profileSelf._id,
+    name: 'Night Care',
+    condition: 'Night',
     time_slot: 'Night',
     reminder_time: '22:00',
     color: '#6366f1',
-    is_default: true
+    icon: 'moon',
+    is_default: true,
+    audit_stamp: auditStamp
   });
 
-  console.log('--- Seeding Patient Medicines with Clinical Metadata ---');
-  // 1. Common: Dolo 650 (In stock)
+  // Backward compatible catalog entries
+  await Catalog.create([
+    { _id: cabCold._id, user_id: patient1._id, name: 'Cold & Cough', time_slot: 'Morning', reminder_time: '08:00', color: '#0d9488' },
+    { _id: cabFever._id, user_id: patient1._id, name: 'Fever & Pain Relief', time_slot: 'Afternoon', reminder_time: '13:00', color: '#0284c7' },
+    { _id: cabNight._id, user_id: patient1._id, name: 'Night Care', time_slot: 'Night', reminder_time: '22:00', color: '#6366f1' }
+  ]);
+
+  console.log('--- Seeding Medicines with v3 Fields & Revisions ---');
+  // 1. Dolo 650 (In stock) - Added by Pharmacist
   const med1 = await Medicine.create({
     patient_id: patient1._id,
-    name: 'Dolo 650',
-    nickname: 'Fever / Headache',
+    profile_id: profileSelf._id,
+    name: 'Dolo 650mg Tablet',
+    nickname: 'Fever',
     generic_name: 'Paracetamol',
-    salt_composition: 'Paracetamol IP 650mg',
+    salt_composition: 'Paracetamol (650mg)',
     dosage_form: 'tablet',
     strength: '650mg',
-    description: 'Fast acting antipyretic and analgesic tablet formulated for fever and headache relief.',
-    usedFor: 'Fever, headache, body pain',
+    description: 'Fast-acting antipyretic and analgesic for prompt reduction of fever and body ache.',
+    usedFor: 'Fever, headache, and acute pain',
     category: 'Common',
-    cautions: 'Do not exceed 4 tablets in 24 hours. Take after food.',
-    source: 'database',
-    manufacturer: 'Micro Labs Ltd.',
+    cautions: 'Do not exceed 4 tablets in 24 hours. Take after food with water.',
+    source: 'scan',
+    entered_by_role: 'pharmacist',
+    entered_by_label: 'Entered by Pharmacist',
+    field_sources: {
+      name: 'scanned',
+      dosage_form: 'scanned',
+      strength: 'scanned',
+      salt_composition: 'database',
+      expiry_date: 'scanned',
+      batch_number: 'scanned',
+      manufacturer: 'scanned'
+    },
+    manufacturer: 'Micro Labs Ltd',
     batch_number: 'ML-9921',
-    expiry_date: new Date('2027-06-15'),
-    quantity: 18,
+    barcode: '8901086001234',
+    expiry_date: new Date('2027-08-15'),
+    quantity: 15,
+    original_quantity: 20,
     low_stock_threshold: 5,
-    status: 'active'
+    stock_threshold: 4,
+    status: 'active',
+    current_revision: 1,
+    initial_audit_stamp: auditStamp,
+    last_audit_stamp: auditStamp,
+    original_entry: {
+      by_user_id: pharmacist._id,
+      by_role: 'pharmacist',
+      label: 'Added by Pharmacist',
+      created_at: new Date()
+    }
   });
 
-  // 2. Chronic: Glycomet 500 (Low stock alert)
+  await MedicineRevision.create({
+    medicine_id: med1._id,
+    revision_number: 1,
+    editor_user_id: pharmacist._id,
+    editor_role: 'pharmacist',
+    editor_name: 'Vikram Sharma (R.Ph.)',
+    entry_label: 'Added by Pharmacist',
+    change_summary: 'Initial medicine verification and packaging scan',
+    changed_fields: [],
+    previous_values: {},
+    new_values: {
+      name: med1.name,
+      salt_composition: med1.salt_composition,
+      dosage_form: med1.dosage_form,
+      strength: med1.strength,
+      quantity: 20,
+      expiry_date: med1.expiry_date,
+      batch_number: med1.batch_number,
+      manufacturer: med1.manufacturer
+    },
+    audit_stamp: auditStamp
+  });
+
+  // 2. Glycomet-GP 1 (Few left warning!)
   const med2 = await Medicine.create({
     patient_id: patient1._id,
-    name: 'Glycomet 500',
+    profile_id: profileFather._id,
+    name: 'Glycomet 500 Tablet',
     nickname: 'Sugar / Diabetes',
     generic_name: 'Metformin Hydrochloride',
-    salt_composition: 'Metformin 500mg',
+    salt_composition: 'Metformin Hydrochloride (500mg)',
     dosage_form: 'tablet',
     strength: '500mg',
-    description: 'Oral antidiabetic biguanide lowering glucose production in liver and improving peripheral uptake.',
-    usedFor: 'Type 2 Diabetes glycemic control',
+    description: 'First-line biguanide oral antihyperglycemic agent for managing blood glucose in type 2 diabetes.',
+    usedFor: 'Type 2 Diabetes Mellitus glycemic control',
     category: 'Chronic',
-    cautions: 'Take with or immediately after meals to minimize stomach upset.',
+    cautions: 'Always take with or after meals to avoid gastrointestinal discomfort.',
     source: 'database',
-    manufacturer: 'USV Ltd.',
+    entered_by_role: 'doctor',
+    entered_by_label: 'Entered by Doctor',
+    field_sources: {
+      name: 'database',
+      salt_composition: 'database',
+      dosage_form: 'database',
+      strength: 'database',
+      expiry_date: 'manual',
+      batch_number: 'manual'
+    },
+    manufacturer: 'USV Ltd',
     batch_number: 'USV-109',
-    expiry_date: new Date('2027-12-01'),
-    quantity: 3, // Low stock!
-    low_stock_threshold: 5,
-    status: 'active'
+    barcode: '8904000000033',
+    expiry_date: new Date('2026-10-30'),
+    quantity: 3, // Few Left!
+    original_quantity: 30,
+    low_stock_threshold: 6,
+    stock_threshold: 6,
+    status: 'active',
+    current_revision: 2,
+    initial_audit_stamp: auditStamp,
+    last_audit_stamp: auditStamp,
+    original_entry: {
+      by_user_id: doctorUser._id,
+      by_role: 'doctor',
+      label: 'Added by Doctor',
+      created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000)
+    }
   });
 
-  // 3. Serious: Augmentin 625 Duo (In stock, antibiotic course)
+  await MedicineRevision.create([
+    {
+      medicine_id: med2._id,
+      revision_number: 1,
+      editor_user_id: doctorUser._id,
+      editor_role: 'doctor',
+      editor_name: 'Dr. Ramesh Sharma, MD',
+      entry_label: 'Added by Doctor',
+      change_summary: 'Initial clinical prescription entry',
+      changed_fields: [],
+      previous_values: {},
+      new_values: { name: med2.name, quantity: 30 },
+      audit_stamp: auditStamp
+    },
+    {
+      medicine_id: med2._id,
+      revision_number: 2,
+      editor_user_id: patient1._id,
+      editor_role: 'patient',
+      editor_name: 'Arjun Rao',
+      entry_label: 'Edited by Patient',
+      change_summary: 'Updated cautions and added nickname "Sugar / Diabetes"',
+      changed_fields: ['nickname', 'cautions'],
+      previous_values: { nickname: '', cautions: 'Take after meal' },
+      new_values: { nickname: 'Sugar / Diabetes', cautions: 'Always take with or after meals to avoid gastrointestinal discomfort.' },
+      audit_stamp: auditStamp
+    }
+  ]);
+
+  // 3. Combiflam (Out of stock warning!)
   const med3 = await Medicine.create({
     patient_id: patient1._id,
-    name: 'Augmentin 625 Duo',
-    nickname: 'Infection / Antibiotic',
-    generic_name: 'Amoxicillin + Clavulanate Potassium',
-    salt_composition: 'Amoxicillin 500mg + Clavulanic Acid 125mg',
+    profile_id: profileSelf._id,
+    name: 'Combiflam Tablet',
+    nickname: 'Body pain',
+    generic_name: 'Ibuprofen and Paracetamol',
+    salt_composition: 'Ibuprofen (400mg) + Paracetamol (325mg)',
     dosage_form: 'tablet',
-    strength: '625mg',
-    description: 'Broad-spectrum antibiotic combining amoxicillin and clavulanate potassium.',
-    usedFor: 'Bacterial infections of chest, throat, dental and urinary tract',
-    category: 'Serious',
-    cautions: 'Complete the full prescribed 5 to 7 day course. Take at start of meal.',
-    source: 'database',
-    manufacturer: 'GlaxoSmithKline',
-    batch_number: 'AUG-8812',
-    expiry_date: new Date('2026-12-31'),
-    quantity: 10,
+    strength: '725mg',
+    description: 'Synergistic NSAID and analgesic combination for moderate to severe muscular pain and inflammation.',
+    usedFor: 'Joint pain, dental pain, and inflammation',
+    category: 'Common',
+    cautions: 'Avoid on empty stomach. Not recommended if history of gastric ulcer.',
+    source: 'manual',
+    entered_by_role: 'patient',
+    entered_by_label: 'Added by Patient',
+    field_sources: {
+      name: 'manual',
+      salt_composition: 'manual',
+      quantity: 'manual'
+    },
+    manufacturer: 'Sanofi India Ltd',
+    batch_number: 'SNF-8820',
+    expiry_date: new Date('2027-04-10'),
+    quantity: 0, // Out of Stock!
+    original_quantity: 10,
     low_stock_threshold: 4,
-    status: 'active'
+    status: 'active',
+    current_revision: 1,
+    initial_audit_stamp: auditStamp,
+    last_audit_stamp: auditStamp,
+    original_entry: {
+      by_user_id: patient1._id,
+      by_role: 'patient',
+      label: 'Added by Patient',
+      created_at: new Date()
+    }
   });
 
-  // 4. Common: Combiflam (Out of stock alert)
+  await MedicineRevision.create({
+    medicine_id: med3._id,
+    revision_number: 1,
+    editor_user_id: patient1._id,
+    editor_role: 'patient',
+    editor_name: 'Arjun Rao',
+    entry_label: 'Added by Patient',
+    change_summary: 'Initial medicine entry',
+    changed_fields: [],
+    previous_values: {},
+    new_values: { name: med3.name, quantity: 10 },
+    audit_stamp: auditStamp
+  });
+
+  // 4. Augmentin 625 (Serious / Prescription)
   const med4 = await Medicine.create({
     patient_id: patient1._id,
-    name: 'Combiflam',
-    nickname: 'Body pain',
-    generic_name: 'Ibuprofen + Paracetamol',
-    salt_composition: 'Ibuprofen 400mg + Paracetamol 325mg',
+    profile_id: profileSelf._id,
+    name: 'Augmentin 625 Duo Tablet',
+    nickname: 'Antibiotic',
+    generic_name: 'Amoxicillin and Clavulanic Acid',
+    salt_composition: 'Amoxicillin (500mg) + Clavulanic Acid (125mg)',
     dosage_form: 'tablet',
-    strength: '400mg + 325mg',
-    description: 'NSAID combination providing anti-inflammatory relief from muscle pain and joint stiffness.',
-    usedFor: 'Muscular aches, joint pain, toothache',
-    category: 'Common',
-    cautions: 'Always take after food. Do not take on empty stomach.',
-    source: 'database',
-    manufacturer: 'Sanofi India',
-    batch_number: 'CBF-301',
-    expiry_date: new Date('2027-08-15'),
-    quantity: 0, // Out of stock!
-    low_stock_threshold: 5,
-    status: 'active'
+    strength: '625mg',
+    description: 'Broad-spectrum beta-lactamase inhibitor penicillin antibiotic targeting respiratory and soft tissue bacterial infections.',
+    usedFor: 'Bacterial chest, ear, sinus and skin infections',
+    category: 'Serious',
+    cautions: 'Complete full prescribed course even if symptoms resolve. Take at start of a meal.',
+    source: 'scan',
+    entered_by_role: 'pharmacist',
+    entered_by_label: 'Entered by Pharmacist',
+    field_sources: {
+      name: 'scanned',
+      dosage_form: 'scanned',
+      strength: 'scanned',
+      batch_number: 'scanned',
+      expiry_date: 'scanned'
+    },
+    manufacturer: 'GlaxoSmithKline Pharmaceuticals Ltd',
+    batch_number: 'GSK-4011',
+    barcode: '8901234567890',
+    expiry_date: new Date('2026-12-15'),
+    quantity: 12,
+    original_quantity: 14,
+    low_stock_threshold: 4,
+    status: 'active',
+    requires_prescription: true,
+    current_revision: 1,
+    initial_audit_stamp: auditStamp,
+    last_audit_stamp: auditStamp,
+    original_entry: {
+      by_user_id: pharmacist._id,
+      by_role: 'pharmacist',
+      label: 'Added by Pharmacist',
+      created_at: new Date()
+    }
   });
 
-  // 5. Chronic: Telma 40 (In stock)
+  await MedicineRevision.create({
+    medicine_id: med4._id,
+    revision_number: 1,
+    editor_user_id: pharmacist._id,
+    editor_role: 'pharmacist',
+    editor_name: 'Vikram Sharma (R.Ph.)',
+    entry_label: 'Added by Pharmacist',
+    change_summary: 'Scanned blister pack front and back',
+    changed_fields: [],
+    previous_values: {},
+    new_values: { name: med4.name, quantity: 14 },
+    audit_stamp: auditStamp
+  });
+
+  // 5. Telma 40 (In stock) - Father's BP medicine
   const med5 = await Medicine.create({
     patient_id: patient1._id,
-    name: 'Telma 40',
+    profile_id: profileFather._id,
+    name: 'Telma 40mg Tablet',
     nickname: 'Blood Pressure',
     generic_name: 'Telmisartan',
     salt_composition: 'Telmisartan 40mg',
@@ -411,61 +565,65 @@ async function runSeed(mongoUri) {
     category: 'Chronic',
     cautions: 'Take consistently at same time each morning. Do not stop abruptly.',
     source: 'database',
+    entered_by_role: 'doctor',
+    entered_by_label: 'Entered by Doctor',
+    field_sources: {
+      name: 'database',
+      salt_composition: 'database',
+      category: 'database'
+    },
     manufacturer: 'Glenmark Pharmaceuticals',
     batch_number: 'TLM-40-19',
     expiry_date: new Date('2027-11-20'),
-    quantity: 25,
-    low_stock_threshold: 5,
-    status: 'active'
+    quantity: 28,
+    original_quantity: 30,
+    low_stock_threshold: 6,
+    status: 'active',
+    current_revision: 1,
+    initial_audit_stamp: auditStamp,
+    last_audit_stamp: auditStamp,
+    original_entry: {
+      by_user_id: doctorUser._id,
+      by_role: 'doctor',
+      label: 'Added by Doctor',
+      created_at: new Date()
+    }
   });
 
-  console.log('--- Linking Medicines to Catalogs ---');
+  await MedicineRevision.create({
+    medicine_id: med5._id,
+    revision_number: 1,
+    editor_user_id: doctorUser._id,
+    editor_role: 'doctor',
+    editor_name: 'Dr. Ramesh Sharma, MD',
+    entry_label: 'Added by Doctor',
+    change_summary: 'Prescribed for chronic hypertension',
+    changed_fields: [],
+    previous_values: {},
+    new_values: { name: med5.name, quantity: 30 },
+    audit_stamp: auditStamp
+  });
+
+  console.log('--- Linking Medicines to Cabinets & Catalogs ---');
+  await CabinetMedicine.create([
+    { cabinet_id: cabCold._id, medicine_id: med1._id, user_id: patient1._id, profile_id: profileSelf._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'When experiencing cough or body ache' },
+    { cabinet_id: cabFever._id, medicine_id: med1._id, user_id: patient1._id, profile_id: profileSelf._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'Take with warm water' },
+    { cabinet_id: cabFever._id, medicine_id: med3._id, user_id: patient1._id, profile_id: profileSelf._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'Severe body pain only' },
+    { cabinet_id: cabCold._id, medicine_id: med4._id, user_id: patient1._id, profile_id: profileSelf._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'Antibiotic course' },
+    { cabinet_id: cabDiabetes._id, medicine_id: med2._id, user_id: patient1._id, profile_id: profileFather._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'Post-breakfast dose' },
+    { cabinet_id: cabDiabetes._id, medicine_id: med5._id, user_id: patient1._id, profile_id: profileFather._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'Morning blood pressure' }
+  ]);
+
+  // Backward-compatible catalog medicines
   await CatalogMedicine.create([
-    {
-      catalog_id: catMorning._id,
-      medicine_id: med5._id,
-      user_id: patient1._id,
-      dose_amount: '1 tablet',
-      timing: 'after_food',
-      notes: 'Take with morning glass of water'
-    },
-    {
-      catalog_id: catMorning._id,
-      medicine_id: med2._id,
-      user_id: patient1._id,
-      dose_amount: '1 tablet',
-      timing: 'after_food',
-      notes: 'Take right after breakfast'
-    },
-    {
-      catalog_id: catAfternoon._id,
-      medicine_id: med3._id,
-      user_id: patient1._id,
-      dose_amount: '1 tablet',
-      timing: 'after_food',
-      notes: 'After lunch antibiotic dose'
-    },
-    {
-      catalog_id: catEvening._id,
-      medicine_id: med1._id,
-      user_id: patient1._id,
-      dose_amount: '1 tablet',
-      timing: 'after_food',
-      notes: 'Only if having headache or fever'
-    },
-    {
-      catalog_id: catNight._id,
-      medicine_id: med2._id,
-      user_id: patient1._id,
-      dose_amount: '1 tablet',
-      timing: 'after_food',
-      notes: 'Dinner time sugar maintenance'
-    }
+    { catalog_id: cabCold._id, medicine_id: med1._id, user_id: patient1._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'When having cold' },
+    { catalog_id: cabFever._id, medicine_id: med3._id, user_id: patient1._id, dose_amount: '1 tablet', timing: 'after_food', notes: 'For fever' }
   ]);
 
   console.log('--- Creating Dose Schedules ---');
   const schedTelma = await DoseSchedule.create({
     patient_id: patient1._id,
+    profile_id: profileFather._id,
     medicine_id: med5._id,
     dose_amount: '1 tablet',
     times_per_day: 1,
@@ -473,11 +631,13 @@ async function runSeed(mongoUri) {
     mealSlots: [{ meal: 'breakfast', timing: 'after_food', dose_amount: '1 tablet' }],
     food_instruction: 'after_food',
     start_date: new Date('2026-01-01'),
-    days_of_week: [0, 1, 2, 3, 4, 5, 6]
+    days_of_week: [0, 1, 2, 3, 4, 5, 6],
+    audit_stamp: auditStamp
   });
 
   const schedGlycomet = await DoseSchedule.create({
     patient_id: patient1._id,
+    profile_id: profileFather._id,
     medicine_id: med2._id,
     dose_amount: '1 tablet',
     times_per_day: 2,
@@ -488,102 +648,100 @@ async function runSeed(mongoUri) {
     ],
     food_instruction: 'after_food',
     start_date: new Date('2026-01-01'),
-    days_of_week: [0, 1, 2, 3, 4, 5, 6]
+    days_of_week: [0, 1, 2, 3, 4, 5, 6],
+    audit_stamp: auditStamp
   });
 
-  const schedAugmentin = await DoseSchedule.create({
+  const schedDolo = await DoseSchedule.create({
     patient_id: patient1._id,
-    medicine_id: med3._id,
+    profile_id: profileSelf._id,
+    medicine_id: med1._id,
     dose_amount: '1 tablet',
     times_per_day: 2,
-    specific_times: ['13:00', '21:00'],
+    specific_times: ['08:00', '20:00'],
     mealSlots: [
-      { meal: 'lunch', timing: 'after_food', dose_amount: '1 tablet' },
+      { meal: 'breakfast', timing: 'after_food', dose_amount: '1 tablet' },
       { meal: 'dinner', timing: 'after_food', dose_amount: '1 tablet' }
     ],
     food_instruction: 'after_food',
-    start_date: new Date('2026-01-01'),
-    days_of_week: [0, 1, 2, 3, 4, 5, 6]
+    start_date: new Date('2026-11-01'),
+    days_of_week: [0, 1, 2, 3, 4, 5, 6],
+    audit_stamp: auditStamp
   });
 
-  console.log('--- Seeding 10 Days of Adherence Dose History ---');
+  console.log('--- Seeding 30 Days of Monthly Adherence History ---');
   const historyLogs = [];
   const today = new Date();
 
-  for (let dayOffset = 9; dayOffset >= 0; dayOffset--) {
+  for (let dayOffset = 29; dayOffset >= 0; dayOffset--) {
     const logDate = new Date(today);
     logDate.setDate(logDate.getDate() - dayOffset);
-    const dateStr = logDate.toISOString().split('T')[0];
     const isToday = dayOffset === 0;
 
-    // Telma 08:00
+    // 1. Telma 08:00
     const timeTelma = new Date(logDate);
     timeTelma.setHours(8, 0, 0, 0);
-    const telmaStatus = dayOffset === 4 ? 'missed' : (isToday ? 'scheduled' : 'taken');
+    const telmaMissed = dayOffset === 5 || dayOffset === 18;
+    const telmaStatus = telmaMissed ? 'missed' : (isToday ? 'scheduled' : 'taken');
     historyLogs.push({
       patient_id: patient1._id,
+      profile_id: profileFather._id,
       schedule_id: schedTelma._id,
       medicine_id: med5._id,
       scheduled_time: timeTelma,
       taken_time: telmaStatus === 'taken' ? new Date(timeTelma.getTime() + 15 * 60000) : null,
-      status: telmaStatus
+      status: telmaStatus,
+      audit_stamp: auditStamp
     });
 
-    // Glycomet 08:30 & 20:30
+    // 2. Glycomet 08:30 & 20:30
     const timeGlyco1 = new Date(logDate);
     timeGlyco1.setHours(8, 30, 0, 0);
     const timeGlyco2 = new Date(logDate);
     timeGlyco2.setHours(20, 30, 0, 0);
 
-    const glyco1Status = dayOffset === 2 ? 'missed' : (isToday ? 'taken' : 'taken');
-    const glyco2Status = isToday ? 'scheduled' : (dayOffset === 2 ? 'missed' : 'taken');
+    const glyco1Status = (dayOffset === 3 || dayOffset === 12) ? 'missed' : (isToday ? 'taken' : 'taken');
+    const glyco2Status = isToday ? 'scheduled' : ((dayOffset === 3 || dayOffset === 22) ? 'missed' : 'taken');
 
     historyLogs.push(
       {
         patient_id: patient1._id,
+        profile_id: profileFather._id,
         schedule_id: schedGlycomet._id,
         medicine_id: med2._id,
         scheduled_time: timeGlyco1,
         taken_time: glyco1Status === 'taken' ? new Date(timeGlyco1.getTime() + 10 * 60000) : null,
-        status: glyco1Status
+        status: glyco1Status,
+        audit_stamp: auditStamp
       },
       {
         patient_id: patient1._id,
+        profile_id: profileFather._id,
         schedule_id: schedGlycomet._id,
         medicine_id: med2._id,
         scheduled_time: timeGlyco2,
         taken_time: glyco2Status === 'taken' ? new Date(timeGlyco2.getTime() + 20 * 60000) : null,
-        status: glyco2Status
+        status: glyco2Status,
+        audit_stamp: auditStamp
       }
     );
 
-    // Augmentin 13:00 & 21:00
-    const timeAug1 = new Date(logDate);
-    timeAug1.setHours(13, 0, 0, 0);
-    const timeAug2 = new Date(logDate);
-    timeAug2.setHours(21, 0, 0, 0);
-
-    const aug1Status = isToday ? 'scheduled' : 'taken';
-    const aug2Status = isToday ? 'scheduled' : (dayOffset === 6 ? 'missed' : 'taken');
-
-    historyLogs.push(
-      {
+    // 3. Dolo 650 (self profile)
+    if (dayOffset <= 14) {
+      const timeDolo = new Date(logDate);
+      timeDolo.setHours(8, 0, 0, 0);
+      const doloStatus = isToday ? 'scheduled' : (dayOffset === 7 ? 'missed' : 'taken');
+      historyLogs.push({
         patient_id: patient1._id,
-        schedule_id: schedAugmentin._id,
-        medicine_id: med3._id,
-        scheduled_time: timeAug1,
-        taken_time: aug1Status === 'taken' ? new Date(timeAug1.getTime() + 5 * 60000) : null,
-        status: aug1Status
-      },
-      {
-        patient_id: patient1._id,
-        schedule_id: schedAugmentin._id,
-        medicine_id: med3._id,
-        scheduled_time: timeAug2,
-        taken_time: aug2Status === 'taken' ? new Date(timeAug2.getTime() + 25 * 60000) : null,
-        status: aug2Status
-      }
-    );
+        profile_id: profileSelf._id,
+        schedule_id: schedDolo._id,
+        medicine_id: med1._id,
+        scheduled_time: timeDolo,
+        taken_time: doloStatus === 'taken' ? new Date(timeDolo.getTime() + 5 * 60000) : null,
+        status: doloStatus,
+        audit_stamp: auditStamp
+      });
+    }
   }
 
   await DoseLog.insertMany(historyLogs);
@@ -598,29 +756,32 @@ async function runSeed(mongoUri) {
   await Notification.create([
     {
       user_id: patient1._id,
-      title: 'Low Stock Alert',
-      message: 'Glycomet 500 (Sugar / Diabetes) has only 3 tablets left.',
+      title: 'Few Left Alert: Glycomet 500',
+      message: 'Glycomet 500 (Sugar / Diabetes) has only 3 tablets remaining. Tap Refill or Buy.',
       type: 'low_stock',
+      channel: 'in_app',
       is_read: false
     },
     {
       user_id: patient1._id,
-      title: 'Out of Stock Alert',
-      message: 'Combiflam (Body pain) is out of stock. Tap Refill or Buy to reorder.',
+      title: 'Out of Stock Alert: Combiflam',
+      message: 'Combiflam (Body pain) is completely out of stock. Tap Refill to order.',
       type: 'low_stock',
+      channel: 'in_app',
       is_read: false
     }
   ]);
 
   console.log('======================================================');
-  console.log('Meditrace v2 Seed Complete:');
-  console.log('  👑 Admin:     admin@meditrace.com');
-  console.log('  👤 Patient 1: patient@meditrace.com (Arjun Rao)');
-  console.log('  👤 Patient 2: sarah.patient@meditrace.com (Sarah Khan)');
-  console.log('  🩺 Doctor 1:  dr.sharma@meditrace.com (Cardiologist)');
-  console.log('  🏪 Retailer 1: apollo.indiranagar@meditrace.com (Apollo Pharmacy)');
-  console.log('  📁 Catalogs:  Morning Routine, Afternoon Dose, Evening Care, Night Rest');
-  console.log(`  📅 History:   ${historyLogs.length} dose logs across 10 days`);
+  console.log('✅ Meditrace v3 Seed Complete:');
+  console.log('  👑 Admin:       admin@meditrace.com');
+  console.log('  👨‍⚕️ Doctor:      dr.sharma@meditrace.com');
+  console.log('  💊 Pharmacist:  pharmacist.sharma@meditrace.com');
+  console.log('  👤 Patient:     patient@meditrace.com (Arjun Rao)');
+  console.log('  👥 Profiles:    Self (Arjun), Father (Ramesh), Mother (Sunita), Son (Aarav)');
+  console.log('  🗄️ Cabinets:    Cold & Cough, Fever & Pain, Diabetes & BP, Daily Vitamins, Night Care');
+  console.log('  📜 Revisions:   Append-only revisions initialized for all medicines');
+  console.log(`  📅 History:     ${historyLogs.length} dose logs across 30 days`);
   console.log('======================================================\n');
 
   return { success: true };

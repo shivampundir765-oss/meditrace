@@ -14,6 +14,38 @@ exports.getHistory = async (req, res, next) => {
   }
 };
 
+exports.getMonthlyMedicineHistory = async (req, res, next) => {
+  try {
+    const { month } = req.query;
+    const medicineId = req.params.id;
+    const profileId = req.profile_id || null;
+    const result = await historyService.getMonthlyMedicineHistory(
+      req.user._id,
+      profileId,
+      medicineId,
+      month
+    );
+    return ApiResponse.success(res, result, 'Monthly medicine dose history retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getMedicineDoseSummary = async (req, res, next) => {
+  try {
+    const medicineId = req.params.id;
+    const profileId = req.profile_id || null;
+    const result = await historyService.getMedicineDoseSummary(
+      req.user._id,
+      profileId,
+      medicineId
+    );
+    return ApiResponse.success(res, result, 'Medicine dose summary retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.markLateDose = async (req, res, next) => {
   try {
     const result = await historyService.markLateDose(req.user._id, req.params.id, req.body);

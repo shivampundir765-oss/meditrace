@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Pill,
   Plus,
@@ -10,11 +11,17 @@ import {
   Clock,
   AlertTriangle,
   X,
-  Check
+  Check,
+  History,
+  MapPin
 } from 'lucide-react';
 import api from '../api/client';
+import { useTranslation } from '../i18n';
+import { useProfile } from '../context/ProfileContext';
 
 export default function MedicinesPage() {
+  const { t } = useTranslation();
+  const { activeProfile } = useProfile();
   const [medicines, setMedicines] = useState([]);
   const [filter, setFilter] = useState('all'); // all, active, expired
   const [categoryFilter, setCategoryFilter] = useState('All'); // All, Common, Chronic, Serious
@@ -22,6 +29,12 @@ export default function MedicinesPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [expandedCards, setExpandedCards] = useState({});
+
+  // Revisions Modal State
+  const [showRevisionsModal, setShowRevisionsModal] = useState(false);
+  const [selectedMedRevisions, setSelectedMedRevisions] = useState([]);
+  const [revisionMedName, setRevisionMedName] = useState('');
+  const [loadingRevisions, setLoadingRevisions] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -59,9 +72,23 @@ export default function MedicinesPage() {
     }
   };
 
+  const openRevisionsModal = async (medId, medName) => {
+    setRevisionMedName(medName);
+    setShowRevisionsModal(true);
+    setLoadingRevisions(true);
+    try {
+      const res = await api.get(`/medicines/${medId}/revisions`);
+      setSelectedMedRevisions(res.data?.revisions || []);
+    } catch (err) {
+      console.error('Error fetching revisions:', err);
+    } finally {
+      setLoadingRevisions(false);
+    }
+  };
+
   useEffect(() => {
     fetchMedicines();
-  }, [filter, categoryFilter, search]);
+  }, [filter, categoryFilter, search, activeProfile]);
 
   const handleCreateMedicine = async (e) => {
     e.preventDefault();
@@ -294,12 +321,21 @@ export default function MedicinesPage() {
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <button
-                    onClick={() => setExpandedCards(prev => ({ ...prev, [med._id]: !prev[med._id] }))}
-                    className="text-teal-600 font-semibold text-[11px] hover:underline"
-                  >
-                    {isExpanded ? 'Less info ↑' : 'More clinical info ↓'}
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setExpandedCards((prev) => ({ ...prev, [med._id]: !prev[med._id] }))}
+                      className="text-teal-600 font-semibold text-[11px] hover:underline"
+                    >
+                      {isExpanded ? 'Less info ↑' : 'More info ↓'}
+                    </button>
+                    <button
+                      onClick={() => openRevisionsModal(med._id, med.name)}
+                      className="text-slate-500 hover:text-teal-700 font-medium text-[11px] flex items-center space-x-1"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>History</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2">
                     {isOutOfStock && (
@@ -508,6 +544,59 @@ export default function MedicinesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Revisions History Modal */}
+      {showRevisionsModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[85vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
+                  <History className="w-5 h-5 text-teal-600" />
+                  <span>Audit & Revision Timeline</span>
+                </h3>
+                <p className="text-xs text-slate-500">{revisionMedName}</p>
+              </div>
+              <button onClick={() => setShowRevisionsModal(false)} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
+                &times;
+              </button>
+            </div>
+
+            {loadingRevisions ? (
+              <p className="text-xs text-slate-400 py-6 text-center">Loading revision audit trail...</p>
+            ) : selectedMedRevisions.length === 0 ? (
+              <p className="text-xs text-slate-500 py-6 text-center">No revision history found.</p>
+            ) : (
+              <div className="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-teal-200">
+                {selectedMedRevisions.map((rev) => (
+                  <div key={rev._id} className="relative flex items-start space-x-3 text-xs">
+                    <span className="w-7 h-7 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 z-10">
+                      v{rev.revision_number}
+                    </span>
+                    <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">
+                          {rev.entry_label || (rev.revision_number === 1 ? 'Added' : 'Edited')}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(rev.timestamp || rev.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 text-[11px]">{rev.change_summary}</p>
+                      {rev.audit_stamp?.location && (
+                        <p className="text-[10px] text-teal-700 flex items-center space-x-1 pt-1">
+                          <MapPin className="w-3 h-3" />
+                          <span>Location: {rev.audit_stamp.location.place_name || rev.audit_stamp.location}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

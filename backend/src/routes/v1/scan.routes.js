@@ -1,6 +1,7 @@
 const express = require('express');
 const scanController = require('../../controllers/scan.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
+const { resolveProfile } = require('../../middleware/profile.middleware');
 const { validate } = require('../../middleware/validate.middleware');
 const {
   scanImageSchema,
@@ -10,6 +11,12 @@ const {
 const router = express.Router();
 
 router.use(authenticate);
+router.use(resolveProfile);
+
+router.post('/two-sided', scanController.scanTwoSided);
+router.post('/draft', scanController.saveDraft);
+router.get('/draft', scanController.getDraft);
+router.delete('/draft', scanController.discardDraft);
 
 /**
  * @openapi

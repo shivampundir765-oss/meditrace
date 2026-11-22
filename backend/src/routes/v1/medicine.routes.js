@@ -1,6 +1,8 @@
 const express = require('express');
 const medicineController = require('../../controllers/medicine.controller');
+const historyController = require('../../controllers/history.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
+const { resolveProfile } = require('../../middleware/profile.middleware');
 const { validate } = require('../../middleware/validate.middleware');
 const {
   createMedicineSchema,
@@ -11,6 +13,7 @@ const { createScheduleSchema } = require('../../validators/schedule.validator');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(resolveProfile);
 
 /**
  * @openapi
@@ -91,6 +94,15 @@ router.route('/:id')
   .get(medicineController.getMedicineById)
   .put(validate(updateMedicineSchema), medicineController.updateMedicine)
   .delete(medicineController.deleteMedicine);
+
+// Revision history endpoint
+router.get('/:id/revisions', medicineController.getMedicineRevisions);
+
+// Monthly dose history calendar endpoint
+router.get('/:id/dose-history', historyController.getMonthlyMedicineHistory);
+
+// Dose summary endpoint
+router.get('/:id/dose-summary', historyController.getMedicineDoseSummary);
 
 /**
  * @openapi

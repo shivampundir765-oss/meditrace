@@ -7,12 +7,16 @@ import Navbar from './components/common/Navbar';
 import Footer from './components/common/Footer';
 import DisclaimerBanner from './components/common/DisclaimerBanner';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import FloatingChatbot from './components/common/FloatingChatbot';
+import { I18nProvider } from './i18n';
+import { ProfileProvider } from './context/ProfileContext';
 
 // Pages
 import HomePage from './pages/HomePage';
 import AuthPage from './pages/AuthPage';
 import SchedulePage from './pages/SchedulePage';
 import MedicinesPage from './pages/MedicinesPage';
+import CabinetsPage from './pages/CabinetsPage';
 import PrescriptionsPage from './pages/PrescriptionsPage';
 import StockPage from './pages/StockPage';
 import ScanPage from './pages/ScanPage';
@@ -59,31 +63,49 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900 selection:bg-teal-500 selection:text-white">
-        <DisclaimerBanner />
-        <Navbar />
+      <I18nProvider>
+        <ProfileProvider>
+          <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900 selection:bg-teal-500 selection:text-white">
+            <DisclaimerBanner />
+            <Navbar />
 
-        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/login" element={<AuthPage />} />
-            <Route path="/register" element={<AuthPage />} />
-            <Route path="/chemists" element={<ChemistFinderPage />} />
-            <Route path="/nearby" element={<ChemistFinderPage />} />
-            <Route path="/places" element={<ChemistFinderPage />} />
-            <Route path="/shop" element={<ShopPage />} />
+            <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/" element={<HomePage />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/login" element={<AuthPage />} />
+                <Route path="/register" element={<AuthPage />} />
+                <Route path="/chemists" element={<ChemistFinderPage />} />
+                <Route path="/nearby" element={<ChemistFinderPage />} />
+                <Route path="/places" element={<ChemistFinderPage />} />
+                <Route path="/shop" element={<ShopPage />} />
 
-            {/* Protected Patient / General Routes */}
-            <Route
-              path="/schedule"
-              element={
-                <ProtectedRoute>
-                  <SchedulePage />
-                </ProtectedRoute>
-              }
-            />
+                {/* Protected Patient / General Routes */}
+                <Route
+                  path="/cabinets"
+                  element={
+                    <ProtectedRoute>
+                      <CabinetsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/catalogs"
+                  element={
+                    <ProtectedRoute>
+                      <CabinetsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/schedule"
+                  element={
+                    <ProtectedRoute>
+                      <SchedulePage />
+                    </ProtectedRoute>
+                  }
+                />
             <Route
               path="/history"
               element={
@@ -181,7 +203,10 @@ export default function App() {
       </main>
 
       <Footer />
+      <FloatingChatbot />
     </div>
+        </ProfileProvider>
+      </I18nProvider>
     </ErrorBoundary>
   );
 }

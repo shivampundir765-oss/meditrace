@@ -1,29 +1,44 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import ProfileSwitcher from './ProfileSwitcher';
+import { useTranslation } from '../i18n';
 
 export default function Header({ user, onLogout }) {
+  const { language, setLanguage } = useTranslation();
+
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'hi' : 'en');
+  };
+
   return (
     <View style={styles.header}>
       <View style={styles.branding}>
-        <View style={styles.logoBadge}>
-          <Text style={styles.logoText}>M</Text>
-        </View>
-        <View>
-          <Text style={styles.appName}>Meditrace</Text>
-          <Text style={styles.subText}>Health & Doses</Text>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
+        <View style={styles.titleWrap}>
+          <Text style={styles.appName}>
+            Medi<Text style={styles.appNameAccent}>trace</Text>
+          </Text>
+          <Text style={styles.subText}>v3 Health</Text>
         </View>
       </View>
 
-      {user && (
-        <View style={styles.userContainer}>
-          <View style={styles.roleTag}>
-            <Text style={styles.roleText}>{user.role || 'patient'}</Text>
-          </View>
+      <View style={styles.rightSection}>
+        {user && <ProfileSwitcher />}
+
+        <TouchableOpacity onPress={toggleLanguage} style={styles.langBtn}>
+          <Text style={styles.langText}>{language === 'en' ? 'HI' : 'EN'}</Text>
+        </TouchableOpacity>
+
+        {user && (
           <TouchableOpacity onPress={onLogout} style={styles.logoutBtn}>
-            <Text style={styles.logoutText}>Log Out</Text>
+            <Text style={styles.logoutText}>✕</Text>
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
     </View>
   );
 }
@@ -37,62 +52,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16
+    paddingHorizontal: 12
   },
   branding: {
     flexDirection: 'row',
     alignItems: 'center'
   },
-  logoBadge: {
+  logoImage: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#0d9488',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 8
   },
-  logoText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold'
+  titleWrap: {
+    justifyContent: 'center'
   },
   appName: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a'
+    color: '#0f172a',
+    letterSpacing: -0.3
+  },
+  appNameAccent: {
+    color: '#0d9488'
   },
   subText: {
     fontSize: 9,
     color: '#64748b',
-    fontWeight: '500'
+    fontWeight: '600'
   },
-  userContainer: {
+  rightSection: {
     flexDirection: 'row',
     alignItems: 'center'
   },
-  roleTag: {
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#ccfbf1',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginRight: 8
+  langBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 6
   },
-  roleText: {
+  langText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#0d9488',
-    textTransform: 'uppercase'
+    color: '#475569'
   },
   logoutBtn: {
     paddingVertical: 4,
-    paddingHorizontal: 8
+    paddingHorizontal: 6
   },
   logoutText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#ef4444',
-    fontWeight: '600'
+    fontWeight: '700'
   }
 });

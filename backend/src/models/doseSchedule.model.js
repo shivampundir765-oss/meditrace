@@ -16,6 +16,12 @@ const doseScheduleSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    profile_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Profile',
+      index: true,
+      default: null
+    },
     dose_amount: {
       type: String,
       required: [true, 'Dose amount is required'],
@@ -76,6 +82,10 @@ const doseScheduleSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    audit_stamp: {
+      type: Object,
+      default: null
+    },
     is_active: {
       type: Boolean,
       default: true
@@ -97,6 +107,7 @@ const doseScheduleSchema = new mongoose.Schema(
 );
 
 doseScheduleSchema.index({ patient_id: 1, is_active: 1 });
+doseScheduleSchema.index({ profile_id: 1, is_active: 1 });
 
 const DoseSchedule = mongoose.model('DoseSchedule', doseScheduleSchema);
 

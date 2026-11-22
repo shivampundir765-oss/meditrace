@@ -1,7 +1,8 @@
 const { DoseLog } = require('../models/doseLog.model');
 const { Medicine } = require('../models/medicine.model');
+const { createAuditStamp } = require('../utils/auditStamp');
 
-const markDoseTaken = async (patientId, doseId, { notes, taken_time } = {}) => {
+const markDoseTaken = async (patientId, doseId, { notes, taken_time, location } = {}) => {
   const log = await DoseLog.findOne({
     _id: doseId,
     patient_id: patientId
@@ -19,6 +20,7 @@ const markDoseTaken = async (patientId, doseId, { notes, taken_time } = {}) => {
   log.status = 'taken';
   log.taken_time = taken_time ? new Date(taken_time) : new Date();
   if (notes) log.notes = notes;
+  log.audit_stamp = createAuditStamp(location);
   await log.save();
 
   // Deduct 1 unit from medicine quantity if not already taken

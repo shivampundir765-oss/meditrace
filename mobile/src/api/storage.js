@@ -1,47 +1,49 @@
-// Lightweight cross-platform storage adapter for Mobile (Expo/React Native)
+// Cross-platform in-memory storage adapter for React Native / Expo
+// Works reliably on ALL Android & iOS devices without extra native bindings
 const memoryStore = new Map();
 
 export const storage = {
   getItem: async (key) => {
-    if (typeof localStorage !== 'undefined') {
-      try {
-        return localStorage.getItem(key);
-      } catch (_e) {
-        // Fallback to memory
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem) {
+        const val = localStorage.getItem(key);
+        if (val !== null) return val;
       }
+    } catch (_e) {
+      // Ignore
     }
     return memoryStore.get(key) || null;
   },
 
   setItem: async (key, value) => {
-    if (typeof localStorage !== 'undefined') {
-      try {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.setItem) {
         localStorage.setItem(key, value);
-      } catch (_e) {
-        // Fallback to memory
       }
+    } catch (_e) {
+      // Ignore
     }
     memoryStore.set(key, value);
   },
 
   removeItem: async (key) => {
-    if (typeof localStorage !== 'undefined') {
-      try {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.removeItem) {
         localStorage.removeItem(key);
-      } catch (_e) {
-        // Fallback
       }
+    } catch (_e) {
+      // Ignore
     }
     memoryStore.delete(key);
   },
 
   clear: async () => {
-    if (typeof localStorage !== 'undefined') {
-      try {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.clear) {
         localStorage.clear();
-      } catch (_e) {
-        // Fallback
       }
+    } catch (_e) {
+      // Ignore
     }
     memoryStore.clear();
   }

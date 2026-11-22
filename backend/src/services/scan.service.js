@@ -375,6 +375,240 @@ const processBarcodeScan = async (patientId, barcode) => {
 };
 
 /**
+ * Analyze image quality for pharmaceutical packaging (lighting, blur, glare)
+ */
+const checkImageQuality = (qualityMetrics = {}) => {
+  const { brightness = 75, blur_score = 80, has_glare = false } = qualityMetrics;
+
+  if (brightness < 35) {
+    return {
+      passed: false,
+      reason: 'too_dark',
+      message: 'Packaging photo is too dark. Please use better lighting or camera flash.',
+      retake_recommended: true
+    };
+  }
+
+  if (blur_score < 40) {
+    return {
+      passed: false,
+      reason: 'blurry',
+      message: 'Photo is blurry and text is not sharp. Hold the device steady and tap to focus.',
+      retake_recommended: true
+    };
+  }
+
+  if (has_glare) {
+    return {
+      passed: false,
+      reason: 'glare',
+      message: 'Glare detected on foil or blister pack. Tilt slightly to remove reflections.',
+      retake_recommended: true
+    };
+  }
+
+  return {
+    passed: true,
+    reason: 'good',
+    message: 'Photo clarity and lighting meet quality standards.',
+    retake_recommended: false
+  };
+};
+
+/**
+ * Process 2-sided packaging scan (front photo and back photo)
+ */
+const processTwoSidedScan = async (patientId, profileId, payload = {}) => {
+  const {
+    front_image = null,
+    back_image = null,
+    ocr_front = '',
+    ocr_back = '',
+    barcode = '',
+    user_role = 'patient',
+    quality_front = {},
+    quality_back = {}
+  } = payload;
+
+  const qualityCheckFront = checkImageQuality(quality_front);
+  const qualityCheckBack = checkImageQuality(quality_back);
+
+  const frontText = ocr_front || payload.simulated_text || '';
+  const backText = ocr_back || payload.simulated_text || '';
+
+  const rawCombinedText = `${frontText}\n---\n${backText}`;
+  const cleanedFront = cleanOcrText(frontText);
+  const cleanedBack = cleanOcrText(backText);
+
+  // 1. Barcode lookup
+  const cleanBarcode = String(barcode || '').trim();
+  let drugMatch = null;
+  const { defaultDrugProvider } = require('./drugProvider');
+
+  if (cleanBarcode) {
+    drugMatch = await defaultDrugProvider.lookupByBarcode(cleanBarcode);
+  }
+
+  // 2. Front packaging: Extract brand name & strength
+  let extractedName = extractMedicineName(cleanedFront) || (drugMatch ? drugMatch.name : '');
+  if (!extractedName && cleanedBack) {
+    extractedName = extractMedicineName(cleanedBack);
+  }
+
+  // 3. Back packaging: Extract batch, expiry, manufacturer
+  const extractedExpiry = extractExpiryDate(cleanedBack) || extractExpiryDate(cleanedFront);
+  const extractedBatch = extractBatchNumber(cleanedBack) || extractBatchNumber(cleanedFront);
+  const extractedManufacturer = extractManufacturer(cleanedBack) || (drugMatch ? drugMatch.manufacturer : '');
+
+  // 4. If no drugMatch by barcode, lookup by name and salt
+  if (!drugMatch && extractedName) {
+    drugMatch = await defaultDrugProvider.lookupByName(extractedName);
+  }
+
+  // 5. Track source per field
+  const fieldSources = {
+    name: drugMatch ? 'database' : extractedName ? 'scanned' : 'manual',
+    salt_composition: drugMatch?.salt_composition ? 'database' : 'manual',
+    dosage_form: drugMatch?.dosage_form ? 'database' : 'scanned',
+    strength: drugMatch?.strength ? 'database' : 'scanned',
+    manufacturer: extractedManufacturer ? 'scanned' : drugMatch?.manufacturer ? 'database' : 'manual',
+    batch_number: extractedBatch ? 'scanned' : 'manual',
+    expiry_date: extractedExpiry ? 'scanned' : 'manual',
+    category: drugMatch?.category ? 'database' : 'manual',
+    description: drugMatch?.description ? 'database' : 'manual',
+    usedFor: drugMatch?.usedFor ? 'database' : 'manual',
+    cautions: drugMatch?.cautions ? 'database' : 'manual'
+  };
+
+  const roleLabel =
+    user_role === 'pharmacist'
+      ? 'Entered by Pharmacist'
+      : user_role === 'doctor'
+      ? 'Entered by Doctor'
+      : 'Entered by Patient';
+
+  const autofillData = {
+    name: extractedName || (drugMatch ? drugMatch.name : ''),
+    generic_name: drugMatch ? drugMatch.generic_name : '',
+    salt_composition: drugMatch ? drugMatch.salt_composition : '',
+    dosage_form: drugMatch ? drugMatch.dosage_form : 'tablet',
+    strength: drugMatch ? drugMatch.strength : '',
+    manufacturer: extractedManufacturer || (drugMatch ? drugMatch.manufacturer : ''),
+    batch_number: extractedBatch || '',
+    expiry_date: extractedExpiry || null,
+    quantity: 10,
+    original_quantity: 10,
+    low_stock_threshold: 5,
+    requires_prescription: drugMatch ? drugMatch.schedule_classification !== 'OTC' : false,
+    abdm_drug_code: drugMatch ? drugMatch.abdm_drug_code : '',
+    therapeutic_class: drugMatch ? drugMatch.usedFor : '',
+    schedule_classification: drugMatch ? drugMatch.schedule_classification : 'OTC',
+    schedule_warning: drugMatch ? drugMatch.cautions : '',
+    cdsco_approval_status: drugMatch ? drugMatch.cdsco_approval_status : 'CDSCO Compliant',
+    storage_guidelines: drugMatch ? drugMatch.storage_guidelines : 'Store in a cool dry place',
+    nickname: drugMatch ? drugMatch.nickname : '',
+    description: drugMatch ? drugMatch.description : '',
+    usedFor: drugMatch ? drugMatch.usedFor : '',
+    category: drugMatch ? drugMatch.category : 'Common',
+    cautions: drugMatch ? drugMatch.cautions : 'Use as directed by physician.',
+    source: drugMatch ? 'database' : 'scan',
+    entered_by_role: user_role,
+    entered_by_label: roleLabel,
+    field_sources: fieldSources
+  };
+
+  const confidence = calculateConfidence(
+    autofillData,
+    extractedExpiry,
+    extractedBatch,
+    extractedManufacturer,
+    drugMatch ? 30 : 0
+  );
+
+  const scan = await Scan.create({
+    patient_id: patientId,
+    profile_id: profileId || null,
+    scan_type: 'two_sided',
+    front_image_url: front_image,
+    back_image_url: back_image,
+    barcode: cleanBarcode || null,
+    raw_text: rawCombinedText,
+    extracted_name: autofillData.name,
+    extracted_expiry: autofillData.expiry_date,
+    extracted_batch: autofillData.batch_number,
+    extracted_manufacturer: autofillData.manufacturer,
+    confidence,
+    autofill_data: autofillData,
+    field_sources: fieldSources,
+    quality_report: {
+      front: qualityCheckFront,
+      back: qualityCheckBack,
+      passed: qualityCheckFront.passed && qualityCheckBack.passed
+    },
+    abdm_registry: drugMatch || null,
+    is_draft: false
+  });
+
+  return scan;
+};
+
+/**
+ * Save work-in-progress scan draft
+ */
+const saveScanDraft = async (patientId, profileId, draftData = {}) => {
+  const existing = await Scan.findOne({
+    patient_id: patientId,
+    is_draft: true
+  });
+
+  const payload = draftData.autofill_data || draftData.draft_data || draftData;
+
+  if (existing) {
+    existing.profile_id = profileId || existing.profile_id;
+    existing.front_image_url = draftData.front_image_url || existing.front_image_url;
+    existing.back_image_url = draftData.back_image_url || existing.back_image_url;
+    existing.barcode = draftData.barcode || existing.barcode;
+    existing.autofill_data = { ...existing.autofill_data, ...payload };
+    existing.field_sources = draftData.field_sources || existing.field_sources;
+    await existing.save();
+    return existing;
+  }
+
+  return await Scan.create({
+    patient_id: patientId,
+    profile_id: profileId || null,
+    scan_type: 'two_sided',
+    front_image_url: draftData.front_image_url || null,
+    back_image_url: draftData.back_image_url || null,
+    barcode: draftData.barcode || null,
+    autofill_data: payload || {},
+    field_sources: draftData.field_sources || {},
+    is_draft: true
+  });
+};
+
+/**
+ * Retrieve latest scan draft
+ */
+const getLatestDraft = async (patientId) => {
+  return await Scan.findOne({
+    patient_id: patientId,
+    is_draft: true
+  }).sort({ updated_at: -1 }).lean();
+};
+
+/**
+ * Discard draft
+ */
+const discardScanDraft = async (patientId) => {
+  await Scan.deleteMany({
+    patient_id: patientId,
+    is_draft: true
+  });
+  return { success: true };
+};
+
+/**
  * Retrieve patient's scan history
  */
 const getScanHistory = async (patientId, { page = 1, limit = 20 }) => {
@@ -404,6 +638,11 @@ module.exports = {
   calculateConfidence,
   processOcrScan,
   processBarcodeScan,
+  processTwoSidedScan,
+  checkImageQuality,
+  saveScanDraft,
+  getLatestDraft,
+  discardScanDraft,
   getScanHistory,
   BARCODE_CATALOGUE
 };

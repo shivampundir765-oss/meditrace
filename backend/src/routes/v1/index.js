@@ -21,6 +21,9 @@ const paymentRoutes = require('./payment.routes');
 const abdmRoutes = require('./abdm.routes');
 const placesRoutes = require('./places.routes');
 const catalogRoutes = require('./catalog.routes');
+const cabinetRoutes = require('./cabinet.routes');
+const profileRoutes = require('./profile.routes');
+const chatbotRoutes = require('./chatbot.routes');
 const nearbyRoutes = require('./nearby.routes');
 const historyRoutes = require('./history.routes');
 
@@ -40,7 +43,10 @@ router.use('/scan', scanRoutes);
 router.use('/chemists', chemistRoutes);
 router.use('/places', placesRoutes);
 router.use('/nearby', nearbyRoutes);
-router.use('/catalogs', catalogRoutes);
+router.use('/cabinets', cabinetRoutes);
+router.use('/catalogs', cabinetRoutes); // alias for backward-compatibility
+router.use('/profiles', profileRoutes);
+router.use('/chatbot', chatbotRoutes);
 router.use('/history', historyRoutes);
 router.use('/abdm', abdmRoutes);
 router.use('/retailer', retailerRoutes);

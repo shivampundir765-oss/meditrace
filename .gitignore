@@ -20,6 +20,15 @@ dist/
 build/
 .expo/
 web-build/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/.idea/
+temp_db/
+mobile/.babel-check/
+*.apk
+!releases/*.apk
 
 # Logs
 npm-debug.log*

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="favGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#favGrad)" />
+  <g transform="translate(32, 32) scale(0.18)">
+    <rect x="-38" y="-110" width="76" height="220" rx="36" fill="#ffffff" />
+    <rect x="-110" y="-38" width="220" height="76" rx="36" fill="#ffffff" />
+    <g transform="rotate(-38)">
+      <path d="M -60,-24 L 0,-24 L 0,24 L -60,24 C -73,24 -84,13 -84,0 C -84,-13 -73,-24 -60,-24 Z" fill="#0d9488" />
+      <path d="M 0,-24 L 60,-24 C 73,-24 84,-13 84,0 C 84,13 73,24 60,24 L 0,24 Z" fill="#10b981" />
+      <line x1="0" y1="-24" x2="0" y2="24" stroke="#ffffff" stroke-width="4" />
+    </g>
+    <path d="M -110, 16 L -50, 16 L -24, -45 L 3, 55 L 30, -25 L 55, 16 L 110, 16"
+          fill="none" stroke="#0f172a" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M -110, 16 L -50, 16 L -24, -45 L 3, 55 L 30, -25 L 55, 16 L 110, 16"
+          fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

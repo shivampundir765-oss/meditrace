@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="50%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05" />
+    </linearGradient>
+    <linearGradient id="crossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f0fdfa" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.28" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#bgGrad)" filter="url(#shadow)" />
+  <rect x="26" y="26" width="460" height="460" rx="110" fill="none" stroke="url(#glowGrad)" stroke-width="3" />
+
+  <!-- Medical Cross & Trace Emblem -->
+  <g transform="translate(256, 256)">
+    <!-- Base Medical Cross -->
+    <rect x="-38" y="-120" width="76" height="240" rx="36" fill="url(#crossGrad)" />
+    <rect x="-120" y="-38" width="240" height="76" rx="36" fill="url(#crossGrad)" />
+
+    <!-- Angled Pharmaceutical Capsule -->
+    <g transform="rotate(-38)">
+      <!-- Left Pill Half: Vibrant Meditrace Teal -->
+      <path d="M -70,-28 L 0,-28 L 0,28 L -70,28 C -85.46,28 -98,15.46 -98,0 C -98,-15.46 -85.46,-28 -70,-28 Z" fill="#0d9488" />
+      <!-- Right Pill Half: Emerald Verification Green -->
+      <path d="M 0,-28 L 70,-28 C 85.46,-28 98,-15.46 98,0 C 98,15.46 85.46,28 70,28 L 0,28 Z" fill="#10b981" />
+      <!-- Center dividing groove -->
+      <line x1="0" y1="-28" x2="0" y2="28" stroke="#ffffff" stroke-width="4" stroke-opacity="0.85" />
+    </g>
+
+    <!-- Dynamic Provenance ECG Trace Wave -->
+    <path d="M -130, 18 L -60, 18 L -28, -52 L 4, 68 L 36, -30 L 64, 18 L 130, 18"
+          fill="none" stroke="#0f172a" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+    <path d="M -130, 18 L -60, 18 L -28, -52 L 4, 68 L 36, -30 L 64, 18 L 130, 18"
+          fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- High-Precision Tracking Nodes -->
+    <circle cx="-28" cy="-52" r="7.5" fill="#10b981" stroke="#ffffff" stroke-width="2.5" />
+    <circle cx="4" cy="68" r="7.5" fill="#06b6d4" stroke="#ffffff" stroke-width="2.5" />
+    <circle cx="36" cy="-30" r="7.5" fill="#10b981" stroke="#ffffff" stroke-width="2.5" />
+  </g>
+</svg>

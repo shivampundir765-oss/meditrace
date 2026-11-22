@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Alert, ScrollView, Linking } from 'react-native';
 import mobileClient from '../api/client';
 
 export default function ChemistShopScreen() {
   const [subTab, setSubTab] = useState('chemists'); // 'chemists' | 'shop' | 'orders'
   const [loading, setLoading] = useState(false);
 
-  // Chemists State
-  const [chemists, setChemists] = useState([]);
+  // Healthcare Facilities State
+  const [facilities, setFacilities] = useState([]);
+  const [facilityFilter, setFacilityFilter] = useState('all'); // 'all' | 'chemist' | 'hospital' | 'clinic'
   const [chemistsSearch, setChemistsSearch] = useState('');
 
   // Shop State
@@ -20,13 +21,14 @@ export default function ChemistShopScreen() {
   // Orders State
   const [orders, setOrders] = useState([]);
 
-  const fetchChemists = async () => {
+  const fetchFacilities = async () => {
     setLoading(true);
     try {
-      const res = await mobileClient.get('/chemists/nearby?latitude=12.9716&longitude=77.5946&radiusKm=15');
-      setChemists(res.data.chemists || []);
+      const res = await mobileClient.get('/places/nearby?latitude=12.9716&longitude=77.5946&radiusKm=25');
+      const list = res.data?.facilities || res.data?.chemists || [];
+      setFacilities(list);
     } catch (_e) {
-      setChemists([]);
+      setFacilities([]);
     } finally {
       setLoading(false);
     }
@@ -37,7 +39,7 @@ export default function ChemistShopScreen() {
     try {
       const endpoint = shopQuery.trim() ? `/shop/search?query=${encodeURIComponent(shopQuery.trim())}` : '/shop/search';
       const res = await mobileClient.get(endpoint);
-      setShopProducts(res.data.results || []);
+      setShopProducts(res.data?.results || []);
     } catch (_e) {
       setShopProducts([]);
     } finally {
@@ -49,7 +51,7 @@ export default function ChemistShopScreen() {
     setLoading(true);
     try {
       const res = await mobileClient.get('/orders');
-      setOrders(res.data.orders || []);
+      setOrders(res.data?.orders || []);
     } catch (_e) {
       setOrders([]);
     } finally {
@@ -58,10 +60,37 @@ export default function ChemistShopScreen() {
   };
 
   useEffect(() => {
-    if (subTab === 'chemists') fetchChemists();
+    if (subTab === 'chemists') fetchFacilities();
     if (subTab === 'shop') fetchShop();
     if (subTab === 'orders') fetchOrders();
   }, [subTab]);
+
+  const handleOpenGoogleMaps = (item) => {
+    const lat = item.coordinates?.latitude || 12.9716;
+    const lng = item.coordinates?.longitude || 77.5946;
+    const url = item.google_maps_url || `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+    Linking.openURL(url).catch(() => Alert.alert('Navigation Error', 'Could not open Google Maps.'));
+  };
+
+  const handleCallFacility = (item) => {
+    const phone = item.emergency_phone || item.phone;
+    if (phone) {
+      Linking.openURL(`tel:${phone.replace(/\s+/g, '')}`).catch(() =>
+        Alert.alert('Phone Call', `Contact: ${phone}`)
+      );
+    } else {
+      Alert.alert('Phone Notice', 'Contact number not available for this facility.');
+    }
+  };
+
+  const filteredFacilities = facilities.filter(f => {
+    if (facilityFilter !== 'all' && f.type !== facilityFilter) return false;
+    if (chemistsSearch.trim()) {
+      const q = chemistsSearch.trim().toLowerCase();
+      return (f.name || '').toLowerCase().includes(q) || (f.address?.street || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
 
   const handleCompareGenerics = async (item) => {
     setSelectedProduct(item);
@@ -134,38 +163,110 @@ export default function ChemistShopScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Sub Tab 1: Nearby Chemists */}
+      {/* Sub Tab 1: Nearby Healthcare & Chemists */}
       {subTab === 'chemists' && (
         <View style={styles.content}>
+          {/* Facility Filter Pills */}
+          <View style={styles.facilityFilterRow}>
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'chemist', label: '💊 Chemists' },
+              { id: 'hospital', label: '🏥 Hospitals' },
+              { id: 'clinic', label: '🩺 Clinics' }
+            ].map(tab => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.facilityFilterPill, facilityFilter === tab.id && styles.facilityFilterPillActive]}
+                onPress={() => setFacilityFilter(tab.id)}
+              >
+                <Text style={[styles.facilityFilterText, facilityFilter === tab.id && styles.facilityFilterTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Quick Search */}
+          <View style={styles.searchBar}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Filter by facility name or area..."
+              value={chemistsSearch}
+              onChangeText={setChemistsSearch}
+            />
+          </View>
+
           {loading ? (
             <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 40 }} />
-          ) : chemists.length === 0 ? (
+          ) : filteredFacilities.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyTitle}>No Chemists Found</Text>
-              <Text style={styles.emptySub}>No registered pharmacies found in your immediate radius.</Text>
+              <Text style={styles.emptyTitle}>No Facilities Found</Text>
+              <Text style={styles.emptySub}>No healthcare facilities match your criteria in this radius.</Text>
             </View>
           ) : (
             <FlatList
-              data={chemists}
+              data={filteredFacilities}
               keyExtractor={(item) => item._id}
               contentContainerStyle={styles.listPadding}
-              renderItem={({ item }) => (
-                <View style={styles.card}>
-                  <View style={styles.cardTop}>
-                    <Text style={styles.storeName}>{item.storeName}</Text>
-                    <Text style={styles.distBadge}>
-                      {item.distanceKm ? `${item.distanceKm.toFixed(1)} km` : 'Nearby'}
+              renderItem={({ item }) => {
+                const isHospital = item.type === 'hospital';
+                const isClinic = item.type === 'clinic';
+
+                return (
+                  <View style={styles.card}>
+                    <View style={styles.cardTop}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <View style={[
+                            styles.typeBadge,
+                            isHospital ? styles.typeBadgeHospital : (isClinic ? styles.typeBadgeClinic : styles.typeBadgeChemist)
+                          ]}>
+                            <Text style={styles.typeBadgeText}>
+                              {item.type === 'chemist' ? '💊 Chemist' : (isHospital ? '🏥 Hospital' : '🩺 Clinic')}
+                            </Text>
+                          </View>
+                          {item.is_emergency_24x7 && (
+                            <View style={styles.emergencyPill}>
+                              <Text style={styles.emergencyPillText}>24x7 Emergency</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.storeName}>{item.name}</Text>
+                      </View>
+                      <Text style={styles.distBadge}>
+                        {item.distanceKm ? `${item.distanceKm.toFixed(1)} km` : 'Nearby'}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.storeAddress}>
+                      {item.address?.street}, {item.address?.city}
                     </Text>
+
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.storeHours}>🕒 {item.opening_hours || item.openingHours || 'Open 24 Hours'}</Text>
+                    </View>
+
+                    {/* Action Buttons: Google Maps Navigation & Call */}
+                    <View style={styles.actionBtnRow}>
+                      <TouchableOpacity
+                        style={styles.directionsBtn}
+                        onPress={() => handleOpenGoogleMaps(item)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.directionsBtnText}>📍 Google Maps</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.callBtn}
+                        onPress={() => handleCallFacility(item)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.callBtnText}>📞 Call</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={styles.storeAddress}>
-                    {item.address?.street}, {item.address?.city}
-                  </Text>
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.storeHours}>🕒 {item.openingHours || '9am - 10pm'}</Text>
-                    <Text style={styles.storePhone}>📞 {item.phone || 'Store'}</Text>
-                  </View>
-                </View>
-              )}
+                );
+              }}
             />
           )}
         </View>
@@ -549,5 +650,82 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     marginTop: 4
+  },
+  facilityFilterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10
+  },
+  facilityFilterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9'
+  },
+  facilityFilterPillActive: {
+    backgroundColor: '#0f172a'
+  },
+  facilityFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  facilityFilterTextActive: {
+    color: '#ffffff'
+  },
+  typeBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  typeBadgeChemist: {
+    backgroundColor: '#d1fae5'
+  },
+  typeBadgeHospital: {
+    backgroundColor: '#ffe4e6'
+  },
+  typeBadgeClinic: {
+    backgroundColor: '#dbeafe'
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  emergencyPill: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  emergencyPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#92400e'
+  },
+  directionsBtn: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginRight: 6
+  },
+  directionsBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  callBtn: {
+    paddingHorizontal: 16,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center'
+  },
+  callBtnText: {
+    color: '#1e293b',
+    fontSize: 12,
+    fontWeight: '700'
   }
 });

@@ -7,12 +7,16 @@ const api = axios.create({
   },
 });
 
-// Request interceptor: attach token
+// Request interceptor: attach token and active profile context
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('meditrace_access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    const activeProfileId = localStorage.getItem('meditrace_active_profile_id');
+    if (activeProfileId) {
+      config.headers['x-profile-id'] = activeProfileId;
     }
     return config;
   },

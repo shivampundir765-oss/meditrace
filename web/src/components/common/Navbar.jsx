@@ -20,6 +20,8 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useCartStore } from '../../store/useCartStore';
 import NotificationBell from './NotificationBell';
 import MeditraceLogo from './MeditraceLogo';
+import ProfileSwitcher from './ProfileSwitcher';
+import { useTranslation } from '../../i18n';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -28,6 +30,7 @@ export default function Navbar() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const { t, language, setLanguage } = useTranslation();
   const cartCount = cart?.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
 
   const handleLogout = () => {
@@ -36,12 +39,12 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { name: 'Schedule', path: '/schedule', icon: Calendar, public: false },
-    { name: 'Medicines', path: '/medicines', icon: Pill, public: false },
-    { name: 'History', path: '/history', icon: Calendar, public: false },
-    { name: 'Stock', path: '/stock', icon: Clock, public: false },
-    { name: 'Scan', path: '/scan', icon: Scan, public: false },
-    { name: 'Nearby', path: '/chemists', icon: MapPin, public: true },
+    { name: t('nav.cabinets', 'Cabinets'), path: '/cabinets', icon: Pill, public: false },
+    { name: t('nav.schedule', 'Schedule'), path: '/schedule', icon: Calendar, public: false },
+    { name: t('nav.medicines', 'Medicines'), path: '/medicines', icon: Pill, public: false },
+    { name: t('nav.history', 'History'), path: '/history', icon: Clock, public: false },
+    { name: t('nav.scan', 'Scan'), path: '/scan', icon: Scan, public: false },
+    { name: t('nav.nearby', 'Nearby'), path: '/chemists', icon: MapPin, public: true },
     { name: 'Doctors', path: '/doctors', icon: UserCheck, public: true },
     { name: 'Shop', path: '/shop', icon: ShoppingBag, public: true },
   ];
@@ -104,6 +107,17 @@ export default function Navbar() {
 
             {isAuthenticated ? (
               <>
+                <ProfileSwitcher />
+
+                {/* Language Toggle */}
+                <button
+                  onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
+                  className="px-2 py-1 text-[11px] font-bold rounded-lg border border-slate-200 hover:border-teal-400 text-slate-700 hover:text-teal-700 bg-slate-50 transition-colors"
+                  title="Switch Language (English / हिंदी)"
+                >
+                  {language === 'en' ? '🇮🇳 HI' : '🇬🇧 EN'}
+                </button>
+
                 <NotificationBell />
 
                 <div className="h-5 w-px bg-slate-200 mx-1" />

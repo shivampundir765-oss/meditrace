@@ -41,8 +41,11 @@ const createNotification = async (userId, {
   if (type === 'low_stock' && settings.lowStockAlerts === false) return null;
   if (type === 'expiry' && settings.expiryAlerts === false) return null;
 
-  // In quiet hours, keep in-app only, suppress external push/email noise
+  // In quiet hours or when push is disabled, keep in-app only
   let effectiveChannel = channel;
+  if (settings.pushNotifications === false && effectiveChannel === 'push') {
+    effectiveChannel = 'in_app';
+  }
   if (isQuietHours(settings.quietHoursStart, settings.quietHoursEnd)) {
     effectiveChannel = 'in_app';
   }

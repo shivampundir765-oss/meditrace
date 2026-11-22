@@ -1,20 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Modal,
+  Alert
+} from 'react-native';
 import mobileClient from '../api/client';
+import { useTranslation } from '../i18n';
+import { useProfile } from '../context/ProfileContext';
 
-export default function ScheduleScreen() {
+export default function ScheduleScreen({ onNavigateToTab }) {
+  const { t, language } = useTranslation();
+  const { activeProfile } = useProfile();
+
   const [scheduleData, setScheduleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [processingId, setProcessingId] = useState(null);
 
-  const fetchTodaySchedule = async () => {
+  // Monthly Calendar Modal State (Feature 5)
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [selectedMed, setSelectedMed] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState('2026-11');
+  const [calendarHistory, setCalendarHistory] = useState(null);
+  const [selectedDayRecord, setSelectedDayRecord] = useState(null);
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+
+  const fetchSchedule = async () => {
     try {
-      const res = await mobileClient.get('/schedule/today');
-      setScheduleData(res.data);
-      setError('');
-    } catch (err) {
-      setError(err.message || 'Failed to fetch today doses');
+      const schedRes = await mobileClient.get('/schedule/today');
+      const sData = schedRes.data?.data || schedRes.data;
+      if (sData) setScheduleData(sData);
+    } catch (_err) {
+      // Graceful fallback
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -22,140 +45,297 @@ export default function ScheduleScreen() {
   };
 
   useEffect(() => {
-    fetchTodaySchedule();
-  }, []);
+    fetchSchedule();
+  }, [activeProfile?._id]);
 
-  const handleTakeDose = async (doseId, medicineName) => {
+  const handleTakeDose = async (doseId, medName) => {
+    setProcessingId(doseId);
     try {
-      await mobileClient.post(`/doses/${doseId}/take`);
-      fetchTodaySchedule();
-      Alert.alert('Dose Logged', `Logged ${medicineName}. 1 unit automatically deducted from your medicine cabinet stock.`);
+      await mobileClient.post(`/doses/${doseId}/take`, { taken_time: new Date() });
+      Alert.alert('Dose Logged', `Logged ${medName}. Stock automatically updated.`);
+      await fetchSchedule();
     } catch (err) {
-      Alert.alert('Action Failed', err.message || 'Unable to log dose taken');
+      Alert.alert('Failed', err.message || 'Unable to log dose taken.');
+    } finally {
+      setProcessingId(null);
     }
   };
 
-  const handleSkipDose = async (doseId, medicineName) => {
+  const handleOpenCalendar = async (med) => {
+    setSelectedMed(med);
+    setShowCalendarModal(true);
+    await fetchMonthlyCalendar(med._id, calendarMonth);
+  };
+
+  const fetchMonthlyCalendar = async (medId, monthStr) => {
+    setLoadingCalendar(true);
+    setSelectedDayRecord(null);
     try {
-      await mobileClient.post(`/doses/${doseId}/skip`, { reason: 'Skipped by patient' });
-      fetchTodaySchedule();
-    } catch (err) {
-      Alert.alert('Action Failed', err.message || 'Unable to skip dose');
+      const res = await mobileClient.get(`/medicines/${medId}/dose-history?month=${monthStr}`);
+      setCalendarHistory(res.data?.data || res.data || null);
+    } catch (_e) {
+      setCalendarHistory(null);
+    } finally {
+      setLoadingCalendar(false);
     }
   };
 
-  const renderDoseItem = ({ item }) => {
-    const isPending = item.status === 'pending';
-    const isTaken = item.status === 'taken';
-    const isSkipped = item.status === 'skipped';
+  const handleMonthChange = (offset) => {
+    const [y, m] = calendarMonth.split('-').map(Number);
+    let newM = m + offset;
+    let newY = y;
+    if (newM > 12) {
+      newM = 1;
+      newY += 1;
+    } else if (newM < 1) {
+      newM = 12;
+      newY -= 1;
+    }
+    const nextMonth = `${newY}-${String(newM).padStart(2, '0')}`;
+    setCalendarMonth(nextMonth);
+    if (selectedMed?._id) {
+      fetchMonthlyCalendar(selectedMed._id, nextMonth);
+    }
+  };
 
-    return (
-      <View style={styles.doseCard}>
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.medicineName}>{item.medicine?.name || item.name || 'Prescribed Medicine'}</Text>
-            <Text style={styles.medicineSub}>
-              {item.medicine?.strength || ''} {item.medicine?.dosageForm ? `• ${item.medicine?.dosageForm}` : ''}
-            </Text>
-          </View>
-          <View style={[
-            styles.statusBadge,
-            isTaken && styles.badgeTaken,
-            isSkipped && styles.badgeSkipped,
-            item.status === 'missed' && styles.badgeMissed
-          ]}>
-            <Text style={[
-              styles.statusText,
-              isTaken && styles.textTaken,
-              isSkipped && styles.textSkipped,
-              item.status === 'missed' && styles.textMissed
-            ]}>
-              {item.status.toUpperCase()}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.metaRow}>
-          <Text style={styles.timeText}>⏰ Scheduled: {item.scheduledTime || '08:00 AM'}</Text>
-          {item.foodInstruction && (
-            <Text style={styles.foodText}>🍽️ {item.foodInstruction.replace('_', ' ')}</Text>
-          )}
-        </View>
-
-        {isPending && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.skipBtn}
-              onPress={() => handleSkipDose(item._id, item.medicine?.name || 'Medicine')}
-            >
-              <Text style={styles.skipBtnText}>Skip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.takeBtn}
-              onPress={() => handleTakeDose(item._id, item.medicine?.name || 'Medicine')}
-            >
-              <Text style={styles.takeBtnText}>✓ Mark as Taken</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
+  const handleMarkLate = async (doseId) => {
+    try {
+      await mobileClient.post(`/doses/${doseId}/take`, {
+        taken_time: new Date(),
+        is_late: true
+      });
+      Alert.alert('Late Dose Recorded', 'Dose marked as taken late and inventory adjusted.');
+      if (selectedMed?._id) {
+        await fetchMonthlyCalendar(selectedMed._id, calendarMonth);
+      }
+      await fetchSchedule();
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not mark late dose');
+    }
   };
 
   const doses = scheduleData?.doses || [];
-  const takenCount = doses.filter(d => d.status === 'taken').length;
-  const totalCount = doses.length;
 
   return (
     <View style={styles.container}>
-      {/* Header Metric Card */}
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryText}>
-          <Text style={styles.summaryTitle}>Today's Medication Tracker</Text>
-          <Text style={styles.summarySubtitle}>
-            {totalCount === 0 ? 'No doses scheduled for today' : `${takenCount} of ${totalCount} doses completed`}
-          </Text>
-        </View>
-        <View style={styles.progressCircle}>
-          <Text style={styles.progressNumber}>
-            {totalCount > 0 ? `${Math.round((takenCount / totalCount) * 100)}%` : '100%'}
-          </Text>
-        </View>
+      {/* Header Disclaimer */}
+      <View style={styles.disclaimerStrip}>
+        <Text style={styles.disclaimerText}>
+          ℹ️ {t('legal.section1')}
+        </Text>
       </View>
 
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+      <ScrollView
+        style={styles.mainScroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchSchedule(); }}
+            colors={['#0d9488']}
+          />
+        }
+      >
+        {/* Adherence Overview Banner */}
+        <View style={styles.overviewBanner}>
+          <View style={styles.overviewCol}>
+            <Text style={styles.bannerLabel}>{t('schedule.today_doses')}</Text>
+            <Text style={styles.bannerVal}>
+              {scheduleData?.takenCount || 0} / {scheduleData?.totalDoses || 0}
+            </Text>
+            <Text style={styles.bannerSub}>
+              {scheduleData?.pendingCount || 0} remaining today
+            </Text>
+          </View>
+          <View style={styles.bannerDivider} />
+          <View style={styles.overviewCol}>
+            <Text style={styles.bannerLabel}>PROFILE</Text>
+            <Text style={styles.bannerVal} numberOfLines={1}>
+              {activeProfile?.name || 'Self'}
+            </Text>
+            <Text style={styles.bannerSub}>
+              {activeProfile?.relationship?.toUpperCase() || 'OWNER'}
+            </Text>
+          </View>
         </View>
-      ) : null}
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={doses}
-          keyExtractor={(item) => item._id}
-          renderItem={renderDoseItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                fetchTodaySchedule();
-              }}
-              colors={['#0d9488']}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>🎉</Text>
-              <Text style={styles.emptyTitle}>All Caught Up!</Text>
-              <Text style={styles.emptyText}>You have no pending doses scheduled for today.</Text>
+        <Text style={styles.sectionTitle}>{t('schedule.today_doses')}</Text>
+
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#0d9488" />
+            <Text style={styles.loadingText}>Syncing schedule...</Text>
+          </View>
+        ) : doses.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyIcon}>🗓️</Text>
+            <Text style={styles.emptyTitle}>No Doses Scheduled for Today</Text>
+            <Text style={styles.emptySub}>
+              Medicines added to your cabinets will automatically appear here with their meal timings.
+            </Text>
+          </View>
+        ) : (
+          doses.map((dose) => {
+            const isTaken = dose.status === 'taken';
+            const medName = dose.medicine?.name || dose.medicine_name || 'Prescription Dose';
+            const medStrength = dose.medicine?.strength || '';
+
+            return (
+              <View key={dose._id} style={[styles.doseCard, isTaken && styles.doseCardTaken]}>
+                <View style={styles.doseInfo}>
+                  <TouchableOpacity
+                    onPress={() => handleOpenCalendar(dose.medicine || { _id: 'med-01', name: medName })}
+                  >
+                    <Text style={styles.doseMedName}>
+                      {medName} {medStrength ? `(${medStrength})` : ''} 📅
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.doseMeta}>
+                    Scheduled: {new Date(dose.scheduled_time || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {dose.food_instruction || 'after_food'}
+                  </Text>
+                </View>
+
+                {isTaken ? (
+                  <View style={styles.takenBadge}>
+                    <Text style={styles.takenBadgeText}>✓ Taken</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.takeBtn}
+                    onPress={() => handleTakeDose(dose._id, medName)}
+                    disabled={processingId === dose._id}
+                  >
+                    {processingId === dose._id ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.takeBtnText}>{t('schedule.mark_taken')}</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+
+      {/* Monthly Adherence Calendar Modal (Feature 5) */}
+      <Modal
+        visible={showCalendarModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCalendarModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>{selectedMed?.name || 'Medicine'} Adherence</Text>
+                <Text style={styles.modalSub}>{t('schedule.calendar_view')}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowCalendarModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
             </View>
-          }
-        />
-      )}
+
+            {/* Month Navigation */}
+            <View style={styles.monthNavRow}>
+              <TouchableOpacity onPress={() => handleMonthChange(-1)} style={styles.navBtn}>
+                <Text style={styles.navBtnText}>◀</Text>
+              </TouchableOpacity>
+              <Text style={styles.currentMonthText}>{calendarMonth}</Text>
+              <TouchableOpacity onPress={() => handleMonthChange(1)} style={styles.navBtn}>
+                <Text style={styles.navBtnText}>▶</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Adherence Rate & Missed Summary */}
+            {calendarHistory?.summary && (
+              <View style={styles.summaryRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>{t('schedule.adherence_rate')}</Text>
+                  <Text style={styles.statVal}>{calendarHistory.summary.adherence_rate || 100}%</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>{t('schedule.total_missed')}</Text>
+                  <Text style={[styles.statVal, { color: '#dc2626' }]}>
+                    {calendarHistory.summary.total_missed || 0}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Days Grid */}
+            {loadingCalendar ? (
+              <ActivityIndicator size="small" color="#0d9488" style={{ margin: 20 }} />
+            ) : (
+              <ScrollView style={styles.calendarBody}>
+                <View style={styles.gridWrap}>
+                  {(calendarHistory?.days || []).map((day) => {
+                    const dayNum = day.date.split('-')[2];
+                    const bg =
+                      day.status === 'taken'
+                        ? '#dcfce7'
+                        : day.status === 'missed'
+                          ? '#fee2e2'
+                          : day.status === 'partly_taken'
+                            ? '#fef3c7'
+                            : '#f1f5f9';
+                    const textColor =
+                      day.status === 'taken'
+                        ? '#166534'
+                        : day.status === 'missed'
+                          ? '#991b1b'
+                          : day.status === 'partly_taken'
+                            ? '#92400e'
+                            : '#64748b';
+
+                    return (
+                      <TouchableOpacity
+                        key={day.date}
+                        style={[styles.dayCell, { backgroundColor: bg }]}
+                        onPress={() => setSelectedDayRecord(day)}
+                      >
+                        <Text style={[styles.dayNumText, { color: textColor }]}>
+                          {parseInt(dayNum, 10)}
+                        </Text>
+                        <Text style={[styles.dayStatusDot, { color: textColor }]}>
+                          {day.status === 'taken' ? '●' : day.status === 'missed' ? '✕' : '○'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Day Details Drawer */}
+                {selectedDayRecord && (
+                  <View style={styles.dayDetailsDrawer}>
+                    <Text style={styles.dayDetailsDate}>
+                      Details for {selectedDayRecord.date} ({selectedDayRecord.status?.toUpperCase()})
+                    </Text>
+                    {(selectedDayRecord.doses || []).map((d, dIdx) => (
+                      <View key={dIdx} style={styles.dayDoseItem}>
+                        <Text style={styles.dayDoseTime}>
+                          Dose {dIdx + 1}: {new Date(d.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        <Text style={styles.dayDoseStatus}>Status: {d.status}</Text>
+                        {d.status === 'missed' && (
+                          <TouchableOpacity
+                            style={styles.markLateBtn}
+                            onPress={() => handleMarkLate(d.dose_id)}
+                          >
+                            <Text style={styles.markLateBtnText}>{t('schedule.mark_late')}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -165,182 +345,293 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc'
   },
-  summaryCard: {
-    backgroundColor: '#0d9488',
-    margin: 16,
-    borderRadius: 20,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#0d9488',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3
+  disclaimerStrip: {
+    backgroundColor: '#fef3c7',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fde68a'
   },
-  summaryText: {
+  disclaimerText: {
+    fontSize: 10,
+    color: '#92400e',
+    lineHeight: 14
+  },
+  mainScroll: {
     flex: 1
   },
-  summaryTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800'
+  content: {
+    padding: 14
   },
-  summarySubtitle: {
-    color: '#ccfbf1',
-    fontSize: 12,
-    marginTop: 4
-  },
-  progressCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 12
-  },
-  progressNumber: {
-    color: '#0d9488',
-    fontSize: 13,
-    fontWeight: '800'
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24
-  },
-  doseCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
-    elevation: 1
-  },
-  cardHeader: {
+  overviewBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16
   },
-  medicineName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a'
+  overviewCol: {
+    flex: 1,
+    alignItems: 'center'
   },
-  medicineSub: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2
-  },
-  statusBadge: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8
-  },
-  badgeTaken: {
-    backgroundColor: '#ecfdf5'
-  },
-  badgeSkipped: {
-    backgroundColor: '#fef2f2'
-  },
-  badgeMissed: {
-    backgroundColor: '#fff1f2'
-  },
-  statusText: {
+  bannerLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: '#64748b'
   },
-  textTaken: {
-    color: '#059669'
+  bannerVal: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0d9488',
+    marginVertical: 2
   },
-  textSkipped: {
-    color: '#dc2626'
+  bannerSub: {
+    fontSize: 10,
+    color: '#94a3b8'
   },
-  textMissed: {
-    color: '#e11d48'
+  bannerDivider: {
+    width: 1,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 10
   },
-  metaRow: {
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 10
+  },
+  doseCard: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 8
   },
-  timeText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '500'
+  doseCardTaken: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0'
   },
-  foodText: {
+  doseInfo: {
+    flex: 1,
+    marginRight: 10
+  },
+  doseMedName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  doseMeta: {
     fontSize: 11,
     color: '#64748b',
-    textTransform: 'capitalize'
+    marginTop: 2
   },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f8fafc',
-    paddingTop: 10
+  takenBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8
   },
-  skipBtn: {
-    flex: 1,
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  skipBtnText: {
-    color: '#64748b',
-    fontSize: 12,
-    fontWeight: '600'
+  takenBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534'
   },
   takeBtn: {
-    flex: 2,
     backgroundColor: '#0d9488',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center'
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8
   },
   takeBtnText: {
-    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff'
+  },
+  centerContainer: {
+    alignItems: 'center',
+    padding: 30
+  },
+  loadingText: {
     fontSize: 12,
-    fontWeight: '700'
+    color: '#64748b',
+    marginTop: 8
   },
-  errorContainer: {
-    margin: 16,
-    padding: 12,
-    backgroundColor: '#fef2f2',
-    borderRadius: 12
-  },
-  errorText: {
-    color: '#dc2626',
-    fontSize: 12,
-    textAlign: 'center'
-  },
-  emptyContainer: {
-    padding: 32,
-    alignItems: 'center'
+  emptyBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   emptyIcon: {
-    fontSize: 36,
+    fontSize: 40,
     marginBottom: 8
   },
   emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4
+  },
+  emptySub: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxHeight: '85%',
+    padding: 16
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 10,
+    marginBottom: 10
+  },
+  modalTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0f172a'
   },
-  emptyText: {
-    fontSize: 12,
+  modalSub: {
+    fontSize: 11,
     color: '#64748b',
-    textAlign: 'center',
-    marginTop: 4
+    marginTop: 1
+  },
+  modalClose: {
+    fontSize: 18,
+    color: '#64748b',
+    padding: 4
+  },
+  monthNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 10,
+    paddingHorizontal: 20
+  },
+  navBtn: {
+    padding: 8
+  },
+  navBtnText: {
+    fontSize: 16,
+    color: '#0d9488',
+    fontWeight: 'bold'
+  },
+  currentMonthText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  statLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600'
+  },
+  statVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0d9488',
+    marginTop: 2
+  },
+  calendarBody: {
+    maxHeight: 340
+  },
+  gridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    justifyContent: 'space-between'
+  },
+  dayCell: {
+    width: '13%',
+    aspectRatio: 1,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4
+  },
+  dayNumText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  dayStatusDot: {
+    fontSize: 8,
+    marginTop: 1
+  },
+  dayDetailsDrawer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  dayDetailsDate: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 6
+  },
+  dayDoseItem: {
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0'
+  },
+  dayDoseTime: {
+    fontSize: 11,
+    color: '#334155'
+  },
+  dayDoseStatus: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1
+  },
+  markLateBtn: {
+    backgroundColor: '#0d9488',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 4,
+    alignSelf: 'flex-start'
+  },
+  markLateBtnText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700'
   }
 });

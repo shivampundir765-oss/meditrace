@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 const TABS = [
-  { key: 'schedule', label: 'Schedule', icon: '⏰' },
-  { key: 'cabinet', label: 'Cabinet', icon: '💊' },
+  { key: 'home', label: 'Home', icon: '🏠' },
   { key: 'scan', label: 'Scan', icon: '📷' },
-  { key: 'shop', label: 'Pharmacy', icon: '🛍️' },
+  { key: 'medicines', label: 'Medicines', icon: '💊' },
+  { key: 'nearby', label: 'Nearby', icon: '📍' },
   { key: 'profile', label: 'Profile', icon: '👤' }
 ];
 

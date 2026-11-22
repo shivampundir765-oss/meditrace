@@ -1,0 +1,117 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "scan": "Scan",
+    "medicines": "Medicines",
+    "cabinets": "Cabinets",
+    "schedule": "Schedule",
+    "nearby": "Nearby Care",
+    "profile": "Profile",
+    "logout": "Logout"
+  },
+  "cabinet": {
+    "title": "Medicine Cabinets",
+    "subtitle": "Group your medications by health condition, symptom, or time of day",
+    "create": "Create New Cabinet",
+    "add_to_existing": "Add to Existing Cabinet",
+    "name_label": "Cabinet Name / Condition",
+    "condition_label": "Medical Condition",
+    "quick_conditions": "Quick Conditions",
+    "conditions": {
+      "cold": "Cold",
+      "fever": "Fever",
+      "headache": "Headache",
+      "stomach": "Stomach",
+      "diabetes": "Diabetes",
+      "bp": "Blood Pressure",
+      "allergy": "Allergy"
+    },
+    "add_prescription": "Add Prescription",
+    "add_medicine": "Add Medicine",
+    "stock_summary": "Stock Overview",
+    "in_stock": "In Stock",
+    "few_left": "Few Left",
+    "out_of_stock": "Out of Stock",
+    "check_this": "Check This",
+    "refill": "Refill / Order",
+    "empty": "No cabinets created yet. Create one to organize your medicines."
+  },
+  "scan": {
+    "title": "Scan Medicine Packaging",
+    "front_title": "Front Packaging Photo",
+    "back_title": "Back Packaging Photo",
+    "front_desc": "Capture brand name, strength and form clearly",
+    "back_desc": "Capture composition, expiry date, batch number and barcode",
+    "capture_front": "Capture Front Photo",
+    "capture_back": "Capture Back Photo",
+    "retake": "Retake Photo",
+    "proceed_confirm": "Confirm & Save Medicine",
+    "guidance_light": "Good lighting, no glare",
+    "guidance_fill": "Fill the frame with packaging",
+    "quality_check": "Checking image clarity...",
+    "blur_warning": "Image appears blurry or dark. Please retake for accurate detection.",
+    "leaving_warning_title": "Leaving Scanning Process",
+    "leaving_warning_msg": "You are leaving the scanning process. Any unsaved progress will be saved as a draft.",
+    "stay_button": "Stay & Continue",
+    "leave_button": "Leave Anyway",
+    "draft_restored": "Restored previous scanning draft"
+  },
+  "fields": {
+    "name": "Medicine Name",
+    "salt_composition": "Active Composition / Salt",
+    "expiry_date": "Expiry Date",
+    "batch_number": "Batch Number",
+    "manufacturer": "Manufacturer",
+    "source_scanned": "Scanned (OCR)",
+    "source_database": "National Drug Registry",
+    "source_pharmacist": "Entered by Pharmacist",
+    "source_doctor": "Entered by Doctor",
+    "source_manual": "Manual Entry"
+  },
+  "schedule": {
+    "title": "Daily Schedule & Dose History",
+    "today_doses": "Today's Doses",
+    "calendar_view": "Monthly Adherence Calendar",
+    "taken": "Taken",
+    "missed": "Missed",
+    "upcoming": "Upcoming",
+    "partly_taken": "Partly Taken",
+    "mark_taken": "Take Dose",
+    "mark_late": "Mark as Taken (Late)",
+    "adherence_rate": "Monthly Adherence",
+    "total_missed": "Total Missed"
+  },
+  "history": {
+    "revisions_title": "Medicine Audit & Revision History",
+    "rev_initial": "Added by",
+    "rev_edited": "Edited by",
+    "location_not_shared": "Location not shared",
+    "immutable_note": "Revision 1 is the immutable original record."
+  },
+  "family": {
+    "title": "Family Mode & Profiles",
+    "switch_profile": "Switch Active Profile",
+    "add_member": "Add Family Member",
+    "relationship": "Relationship",
+    "access_level": "Access Level",
+    "owner": "Owner",
+    "caregiver_edit": "Caregiver (Full Edit)",
+    "caregiver_view": "Caregiver (View Only)"
+  },
+  "chatbot": {
+    "title": "MediTrace Health AI",
+    "header_sub": "Strictly Informational • Not a Doctor or Pharmacist",
+    "disclaimer": "I am an AI assistant, not a doctor or pharmacist. I can provide general medicine-related information and help you understand your records, but I cannot diagnose medical conditions or prescribe treatment. Always consult a qualified healthcare professional before making medical decisions.",
+    "first_use_title": "Important Medical Notice",
+    "first_use_accept": "I Understand and Acknowledge",
+    "emergency_warning": "If you are experiencing a medical emergency, chest pain, or severe difficulty breathing, please contact emergency services immediately:",
+    "emergency_call_btn": "Call 112 / 108 Emergency",
+    "input_placeholder": "Ask about your medicines, stock, schedule, or safety..."
+  },
+  "legal": {
+    "title": "Important Medical & Legal Notice",
+    "section1": "MediTrace is an auxiliary management tool. It does not provide medical diagnoses or prescriptions.",
+    "section2": "Always check physical packaging and consult your doctor or certified pharmacist before modifying treatments.",
+    "section3": "Emergency Services: In life-threatening emergencies, immediately dial 112 or 108 (India) or your local emergency hotline."
+  }
+}

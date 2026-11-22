@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Image } from 'react-native';
 import mobileClient from '../api/client';
 import storage from '../api/storage';
 
@@ -57,9 +57,11 @@ export default function AuthScreen({ onAuthSuccess }) {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.card}>
-        <View style={styles.iconCircle}>
-          <Text style={styles.iconText}>💊</Text>
-        </View>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
 
         <Text style={styles.title}>
           {isRegister ? 'Join Meditrace' : 'Welcome to Meditrace'}
@@ -157,6 +159,38 @@ export default function AuthScreen({ onAuthSuccess }) {
               : "Don't have an account? Create One"}
           </Text>
         </TouchableOpacity>
+
+        <View style={styles.demoDivider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR QUICK DEMO</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          style={styles.demoLoginBtn}
+          onPress={async () => {
+            setLoading(true);
+            try {
+              const res = await mobileClient.post('/auth/login', {
+                email: 'alex@meditrace.health',
+                password: 'password123'
+              });
+              const data = res.data;
+              await storage.setItem('meditrace_access_token', data.accessToken);
+              await storage.setItem('meditrace_refresh_token', data.refreshToken);
+              await storage.setItem('meditrace_user', JSON.stringify(data.user));
+              onAuthSuccess(data.user);
+            } catch (err) {
+              setError(err.message || 'Demo login failed');
+            } finally {
+              setLoading(false);
+            }
+          }}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.demoLoginBtnText}>⚡ Instant Demo Sign-In (Patient)</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -180,18 +214,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9'
   },
-  iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#f0fdfa',
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     alignSelf: 'center',
-    marginBottom: 12
-  },
-  iconText: {
-    fontSize: 24
+    marginBottom: 14
   },
   title: {
     fontSize: 20,
@@ -286,5 +314,35 @@ const styles = StyleSheet.create({
     color: '#0d9488',
     fontSize: 12,
     fontWeight: '600'
+  },
+  demoDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 18,
+    gap: 8
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0'
+  },
+  dividerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+    letterSpacing: 0.8
+  },
+  demoLoginBtn: {
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1.5,
+    borderColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center'
+  },
+  demoLoginBtnText: {
+    color: '#0d9488',
+    fontSize: 13,
+    fontWeight: '700'
   }
 });

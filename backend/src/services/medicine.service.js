@@ -1,9 +1,11 @@
 const { Medicine } = require('../models/medicine.model');
+const { Profile } = require('../models/profile.model');
 const { DoseSchedule } = require('../models/doseSchedule.model');
 const { DoseLog } = require('../models/doseLog.model');
-const { CatalogMedicine } = require('../models/catalogMedicine.model');
-const { Catalog } = require('../models/catalog.model');
-const medicineLookupService = require('./medicineLookup.service');
+const { CabinetMedicine } = require('../models/cabinetMedicine.model');
+const { Cabinet } = require('../models/cabinet.model');
+const { defaultDrugProvider } = require('./drugProvider');
+const revisionService = require('./revision.service');
 const { generateDoseLogsForDate } = require('./schedule.service');
 
 /**
@@ -16,7 +18,15 @@ const computeMedicineStatusAndAlerts = (med, scheduleInfo = null) => {
 
   const now = new Date();
   const quantity = typeof med.quantity === 'number' ? med.quantity : 0;
-  const threshold = med.low_stock_threshold || 5;
+  const originalQuantity = typeof med.original_quantity === 'number' ? med.original_quantity : quantity;
+
+  // Dynamic Few Left Threshold: max(3 days dosage, 20% of original quantity)
+  const dailyDoses = scheduleInfo?.times_per_day || (scheduleInfo?.mealSlots?.length || 2);
+  const calculatedThreshold = Math.max(dailyDoses * 3, Math.max(1, Math.round(originalQuantity * 0.2)));
+  const effectiveThreshold =
+    med.stock_threshold !== null && med.stock_threshold !== undefined
+      ? Number(med.stock_threshold)
+      : (med.low_stock_threshold || calculatedThreshold);
 
   // 1. Expiry alerts
   if (med.expiry_date) {
@@ -54,17 +64,15 @@ const computeMedicineStatusAndAlerts = (med, scheduleInfo = null) => {
     });
     statusLine = 'Out of stock';
     statusColor = 'red';
-  } else if (quantity <= threshold) {
-    // Estimate daily doses
-    const dailyDoses = scheduleInfo?.times_per_day || 1;
-    const daysLeft = Math.max(1, Math.floor(quantity / dailyDoses));
+  } else if (quantity <= effectiveThreshold) {
+    const daysLeft = Math.max(1, Math.floor(quantity / Math.max(1, dailyDoses)));
     alerts.push({
       type: 'low_stock',
       level: 'amber',
-      message: `Low stock (${quantity} doses left, ~${daysLeft} day${daysLeft === 1 ? '' : 's'})`
+      message: `Few left (${quantity} doses left, ~${daysLeft} day${daysLeft === 1 ? '' : 's'})`
     });
     if (statusColor !== 'red') {
-      statusLine = `Low stock (${quantity} left, ~${daysLeft}d)`;
+      statusLine = `Few left (${quantity} left, ~${daysLeft}d)`;
       statusColor = 'amber';
     }
   }
@@ -87,40 +95,95 @@ const computeMedicineStatusAndAlerts = (med, scheduleInfo = null) => {
     statusLine,
     statusColor,
     alerts,
-    hasAlert: alerts.length > 0
+    hasAlert: alerts.length > 0,
+    effectiveThreshold
   };
 };
 
-const createMedicine = async (patientId, data) => {
-  // 1. Clinical metadata enrichment via lookup if empty
+const createMedicine = async (patientId, profileId, data, editorUser = null, locationPayload = null) => {
+  // 1. Clinical metadata enrichment via DrugInfoProvider if empty
   let enriched = { ...data };
   if (!enriched.description || !enriched.usedFor || !enriched.category) {
-    const lookupResult = await medicineLookupService.lookup(data.name, data.salt_composition);
-    enriched.description = enriched.description || lookupResult.description;
-    enriched.usedFor = enriched.usedFor || lookupResult.usedFor;
-    enriched.category = enriched.category || lookupResult.category || 'Common';
-    enriched.cautions = enriched.cautions || lookupResult.cautions;
-    enriched.source = enriched.source || lookupResult.source;
-    if (!enriched.nickname && lookupResult.nickname) {
-      enriched.nickname = lookupResult.nickname;
+    let lookupResult = null;
+    if (data.barcode) {
+      lookupResult = await defaultDrugProvider.lookupByBarcode(data.barcode);
     }
-    if (!enriched.strength && lookupResult.strength) {
-      enriched.strength = lookupResult.strength;
+    if (!lookupResult) {
+      lookupResult = await defaultDrugProvider.lookupByName(data.name, data.salt_composition);
+    }
+
+    if (lookupResult) {
+      enriched.description = enriched.description || lookupResult.description;
+      enriched.usedFor = enriched.usedFor || lookupResult.usedFor;
+      enriched.category = enriched.category || lookupResult.category || 'Common';
+      enriched.cautions = enriched.cautions || lookupResult.cautions;
+      enriched.source = enriched.source || lookupResult.source;
+      if (!enriched.nickname && lookupResult.nickname) {
+        enriched.nickname = lookupResult.nickname;
+      }
+      if (!enriched.strength && lookupResult.strength) {
+        enriched.strength = lookupResult.strength;
+      }
+      if (!enriched.dosage_form && lookupResult.dosage_form) {
+        enriched.dosage_form = lookupResult.dosage_form;
+      }
+      if (!enriched.abdm_drug_code && lookupResult.abdm_drug_code) {
+        enriched.abdm_drug_code = lookupResult.abdm_drug_code;
+      }
+      if (!enriched.cdsco_approval_status && lookupResult.cdsco_approval_status) {
+        enriched.cdsco_approval_status = lookupResult.cdsco_approval_status;
+      }
     }
   }
 
-  const medicine = await Medicine.create({
+  let effectivePatientId = patientId;
+  if (data.patient_id) {
+    effectivePatientId = data.patient_id;
+  } else if (profileId) {
+    const prof = await Profile.findById(profileId);
+    if (prof && prof.user_id) effectivePatientId = prof.user_id;
+  }
+
+  const role = (editorUser && editorUser.role) || 'patient';
+  let enteredByLabel = 'Added by Patient';
+  if (role === 'pharmacist') {
+    enteredByLabel = 'Entered by Pharmacist';
+  } else if (role === 'doctor') {
+    enteredByLabel = 'Entered by Doctor';
+  }
+
+  const quantity = Number(enriched.quantity) || 0;
+  const originalQuantity = Number(enriched.original_quantity) || quantity;
+
+  const medicine = new Medicine({
     ...enriched,
-    patient_id: patientId
+    patient_id: effectivePatientId,
+    profile_id: profileId || enriched.profile_id || null,
+    quantity,
+    original_quantity: originalQuantity,
+    entered_by_role: role,
+    entered_by_label: enteredByLabel,
+    field_sources: enriched.field_sources || {},
+    is_deleted: false,
+    current_revision: 1
   });
 
-  // 2. Handle catalog assignment if provided
-  if (data.catalog_id) {
+  await medicine.save();
+
+  // Create immutable Revision 1
+  const actor = editorUser || { _id: patientId, role: 'patient', name: 'Patient' };
+  await revisionService.createInitialRevision(medicine, actor, locationPayload);
+  await medicine.save();
+
+  // 2. Handle cabinet assignment if provided (supports cabinet_id or legacy catalog_id)
+  const targetCabinetId = data.cabinet_id || data.catalog_id;
+  if (targetCabinetId) {
     try {
-      await CatalogMedicine.findOneAndUpdate(
-        { catalog_id: data.catalog_id, medicine_id: medicine._id },
+      await CabinetMedicine.findOneAndUpdate(
+        { cabinet_id: targetCabinetId, medicine_id: medicine._id },
         {
           user_id: patientId,
+          profile_id: profileId || medicine.profile_id,
           dose_amount: data.dose_amount || '1 tablet',
           timing: data.timing || 'after_food',
           notes: data.notes || ''
@@ -138,11 +201,12 @@ const createMedicine = async (patientId, data) => {
       dinner: '20:00',
       bedtime: '22:00'
     };
-    const times = data.mealSlots.map(s => mealTimesMap[s.meal] || '08:00');
+    const times = data.mealSlots.map((s) => mealTimesMap[s.meal] || '08:00');
 
     const schedule = await DoseSchedule.create({
       medicine_id: medicine._id,
       patient_id: patientId,
+      profile_id: profileId || medicine.profile_id,
       dose_amount: data.dose_amount || '1 tablet',
       times_per_day: data.mealSlots.length,
       specific_times: [...new Set(times)],
@@ -161,8 +225,15 @@ const createMedicine = async (patientId, data) => {
   };
 };
 
-const getMedicines = async (patientId, { page = 1, limit = 20, status, filter, search, category }) => {
-  const query = { patient_id: patientId };
+const getMedicines = async (patientId, profileId, { page = 1, limit = 50, status, filter, search, category, cabinet_id, catalog_id }) => {
+  const query = {
+    patient_id: patientId,
+    is_deleted: { $ne: true }
+  };
+
+  if (profileId) {
+    query.$or = [{ profile_id: profileId }, { profile_id: null }];
+  }
 
   if (status) {
     query.status = status;
@@ -177,75 +248,71 @@ const getMedicines = async (patientId, { page = 1, limit = 20, status, filter, s
     query.expiry_date = { $lt: now, $ne: null };
   } else if (filter === 'active') {
     query.status = 'active';
+  }
+
+  if (search && search.trim()) {
+    const term = search.trim();
     query.$or = [
-      { expiry_date: { $gte: now } },
-      { expiry_date: null }
+      { name: { $regex: term, $options: 'i' } },
+      { generic_name: { $regex: term, $options: 'i' } },
+      { salt_composition: { $regex: term, $options: 'i' } },
+      { nickname: { $regex: term, $options: 'i' } },
+      { usedFor: { $regex: term, $options: 'i' } }
     ];
   }
 
-  if (search) {
-    const cleanSearch = search.trim();
-    query.$or = [
-      { name: { $regex: cleanSearch, $options: 'i' } },
-      { nickname: { $regex: cleanSearch, $options: 'i' } },
-      { generic_name: { $regex: cleanSearch, $options: 'i' } },
-      { salt_composition: { $regex: cleanSearch, $options: 'i' } },
-      { usedFor: { $regex: cleanSearch, $options: 'i' } }
-    ];
+  // Handle cabinet filter if passed
+  const cabFilterId = cabinet_id || catalog_id;
+  if (cabFilterId) {
+    const cabMeds = await CabinetMedicine.find({ cabinet_id: cabFilterId }).lean();
+    const allowedIds = cabMeds.map((cm) => cm.medicine_id);
+    query._id = { $in: allowedIds };
   }
 
-  const skip = (page - 1) * limit;
+  const skip = (Number(page) - 1) * Number(limit);
   const [medicines, total] = await Promise.all([
-    Medicine.find(query).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
+    Medicine.find(query).sort({ created_at: -1 }).skip(skip).limit(Number(limit)).lean(),
     Medicine.countDocuments(query)
   ]);
 
-  // Fetch catalogs and schedules to attach contextual status & alert information
-  const medIds = medicines.map(m => m._id);
-  const [schedules, catalogMedicines, catalogs] = await Promise.all([
-    DoseSchedule.find({ medicine_id: { $in: medIds }, is_active: true }).lean(),
-    CatalogMedicine.find({ medicine_id: { $in: medIds } }).lean(),
-    Catalog.find({ user_id: patientId }).lean()
+  const medicineIds = medicines.map((m) => m._id);
+
+  const [schedules, cabinetMappings] = await Promise.all([
+    DoseSchedule.find({ medicine_id: { $in: medicineIds }, is_active: true }).lean(),
+    CabinetMedicine.find({ medicine_id: { $in: medicineIds } }).populate('cabinet_id').lean()
   ]);
 
   const scheduleMap = {};
-  schedules.forEach(s => {
+  schedules.forEach((s) => {
     scheduleMap[String(s.medicine_id)] = s;
   });
 
-  const catMap = {};
-  catalogMedicines.forEach(cm => {
-    const cat = catalogs.find(c => String(c._id) === String(cm.catalog_id));
-    if (cat) {
-      catMap[String(cm.medicine_id)] = {
-        catalog_id: cat._id,
-        name: cat.name,
-        time_slot: cat.time_slot,
-        color: cat.color,
+  const cabMap = {};
+  cabinetMappings.forEach((cm) => {
+    if (cm.cabinet_id) {
+      cabMap[String(cm.medicine_id)] = {
+        cabinet_id: cm.cabinet_id._id,
+        name: cm.cabinet_id.name,
+        time_slot: cm.cabinet_id.time_slot,
+        color: cm.cabinet_id.color,
         timing: cm.timing,
         dose_amount: cm.dose_amount
       };
     }
   });
 
-  const enrichedMedicines = medicines.map(med => {
+  const enrichedMedicines = medicines.map((med) => {
     const sched = scheduleMap[String(med._id)] || null;
-    const cat = catMap[String(med._id)] || null;
+    const cab = cabMap[String(med._id)] || null;
     const statusData = computeMedicineStatusAndAlerts(med, sched);
 
     return {
       ...med,
-      catalog: cat,
+      cabinet: cab,
+      catalog: cab, // backward compatible alias
       schedule: sched,
       ...statusData
     };
-  });
-
-  // Sort: medicines with active alerts first, then normal
-  enrichedMedicines.sort((a, b) => {
-    if (a.hasAlert && !b.hasAlert) return -1;
-    if (!a.hasAlert && b.hasAlert) return 1;
-    return 0;
   });
 
   return {
@@ -259,12 +326,14 @@ const getMedicines = async (patientId, { page = 1, limit = 20, status, filter, s
   };
 };
 
-const getMedicineById = async (patientId, medicineId) => {
-  const medicine = await Medicine.findOne({
+const getMedicineById = async (patientId, profileId, medicineId) => {
+  const query = {
     _id: medicineId,
-    patient_id: patientId
-  }).lean();
+    patient_id: patientId,
+    is_deleted: { $ne: true }
+  };
 
+  const medicine = await Medicine.findOne(query).lean();
   if (!medicine) {
     const error = new Error('Medicine not found');
     error.statusCode = 404;
@@ -272,52 +341,50 @@ const getMedicineById = async (patientId, medicineId) => {
     throw error;
   }
 
-  const [schedules, catalogMapping] = await Promise.all([
+  const [schedules, cabinetMapping, revisions] = await Promise.all([
     DoseSchedule.find({ medicine_id: medicineId, patient_id: patientId }).lean(),
-    CatalogMedicine.findOne({ medicine_id: medicineId, user_id: patientId }).populate('catalog_id').lean()
+    CabinetMedicine.findOne({ medicine_id: medicineId, user_id: patientId }).populate('cabinet_id').lean(),
+    revisionService.getRevisions(medicineId)
   ]);
 
-  const activeSchedule = schedules.find(s => s.is_active) || schedules[0] || null;
+  const activeSchedule = schedules.find((s) => s.is_active) || schedules[0] || null;
   const statusData = computeMedicineStatusAndAlerts(medicine, activeSchedule);
 
   return {
     medicine: {
       ...medicine,
-      catalog: catalogMapping ? {
-        catalog_id: catalogMapping.catalog_id?._id,
-        name: catalogMapping.catalog_id?.name,
-        time_slot: catalogMapping.catalog_id?.time_slot,
-        color: catalogMapping.catalog_id?.color,
-        timing: catalogMapping.timing,
-        dose_amount: catalogMapping.dose_amount
-      } : null,
+      cabinet: cabinetMapping
+        ? {
+            cabinet_id: cabinetMapping.cabinet_id?._id,
+            name: cabinetMapping.cabinet_id?.name,
+            time_slot: cabinetMapping.cabinet_id?.time_slot,
+            color: cabinetMapping.cabinet_id?.color,
+            timing: cabinetMapping.timing,
+            dose_amount: cabinetMapping.dose_amount
+          }
+        : null,
+      catalog: cabinetMapping
+        ? {
+            catalog_id: cabinetMapping.cabinet_id?._id,
+            name: cabinetMapping.cabinet_id?.name,
+            time_slot: cabinetMapping.cabinet_id?.time_slot,
+            color: cabinetMapping.cabinet_id?.color,
+            timing: cabinetMapping.timing,
+            dose_amount: cabinetMapping.dose_amount
+          }
+        : null,
       ...statusData
     },
-    schedules
+    schedules,
+    revisions
   };
 };
 
-const updateMedicine = async (patientId, medicineId, data) => {
-  const medicine = await Medicine.findOneAndUpdate(
-    { _id: medicineId, patient_id: patientId },
-    { $set: data },
-    { new: true, runValidators: true }
-  );
-
-  if (!medicine) {
-    const error = new Error('Medicine not found');
-    error.statusCode = 404;
-    error.errorCode = 'NOT_FOUND';
-    throw error;
-  }
-
-  return medicine;
-};
-
-const deleteMedicine = async (patientId, medicineId) => {
-  const medicine = await Medicine.findOneAndDelete({
+const updateMedicine = async (patientId, medicineId, data, editorUser = null, locationPayload = null) => {
+  const medicine = await Medicine.findOne({
     _id: medicineId,
-    patient_id: patientId
+    patient_id: patientId,
+    is_deleted: { $ne: true }
   });
 
   if (!medicine) {
@@ -327,49 +394,52 @@ const deleteMedicine = async (patientId, medicineId) => {
     throw error;
   }
 
-  // Cascade delete schedules, logs, and catalog medicines
-  const schedules = await DoseSchedule.find({ medicine_id: medicineId });
-  const scheduleIds = schedules.map(s => s._id);
+  // Create append-only revision on modification
+  const actor = editorUser || { _id: patientId, role: 'patient', name: 'Patient' };
+  await revisionService.createEditRevision(medicine, actor, data, locationPayload);
 
-  await Promise.all([
-    DoseSchedule.deleteMany({ medicine_id: medicineId }),
-    CatalogMedicine.deleteMany({ medicine_id: medicineId }),
-    DoseLog.deleteMany({
-      $or: [
-        { medicine_id: medicineId },
-        { schedule_id: { $in: scheduleIds } }
-      ]
-    })
-  ]);
+  // Apply updates to medicine document
+  Object.keys(data).forEach((key) => {
+    if (!['_id', 'patient_id', 'is_deleted', 'deleted_at', 'deleted_by', 'current_revision'].includes(key)) {
+      medicine[key] = data[key];
+    }
+  });
 
-  return { message: 'Medicine and associated schedules removed successfully' };
+  await medicine.save();
+  return medicine;
 };
 
-/**
- * Migration helper to enrich any legacy medicines in DB that lack clinical category / usedFor
- */
-const enrichExistingMedicines = async () => {
-  try {
-    const legacyMeds = await Medicine.find({
-      $or: [
-        { category: { $exists: false } },
-        { usedFor: { $exists: false } },
-        { usedFor: '' },
-        { description: '' }
-      ]
-    });
+const deleteMedicine = async (patientId, medicineId, editorUser = null) => {
+  const medicine = await Medicine.findOne({
+    _id: medicineId,
+    patient_id: patientId,
+    is_deleted: { $ne: true }
+  });
 
-    for (const med of legacyMeds) {
-      const lookup = await medicineLookupService.lookup(med.name, med.salt_composition);
-      med.description = med.description || lookup.description;
-      med.usedFor = med.usedFor || lookup.usedFor;
-      med.category = med.category || lookup.category || 'Common';
-      med.cautions = med.cautions || lookup.cautions;
-      med.source = med.source || lookup.source;
-      if (!med.nickname && lookup.nickname) med.nickname = lookup.nickname;
-      await med.save();
-    }
-  } catch (_e) {}
+  if (!medicine) {
+    const error = new Error('Medicine not found');
+    error.statusCode = 404;
+    error.errorCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  // Soft delete medicine (never delete revision history)
+  medicine.is_deleted = true;
+  medicine.deleted_at = new Date();
+  medicine.deleted_by = editorUser?._id || patientId;
+  await medicine.save();
+
+  // Deactivate schedules and cabinet linkages
+  await Promise.all([
+    DoseSchedule.updateMany({ medicine_id: medicineId }, { $set: { is_active: false } }),
+    CabinetMedicine.deleteMany({ medicine_id: medicineId })
+  ]);
+
+  return { success: true, message: 'Medicine moved to archived/deleted successfully' };
+};
+
+const getMedicineRevisions = async (medicineId) => {
+  return await revisionService.getRevisions(medicineId);
 };
 
 module.exports = {
@@ -378,6 +448,6 @@ module.exports = {
   getMedicineById,
   updateMedicine,
   deleteMedicine,
-  computeMedicineStatusAndAlerts,
-  enrichExistingMedicines
+  getMedicineRevisions,
+  computeMedicineStatusAndAlerts
 };

@@ -8,13 +8,41 @@ const scanSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    profile_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Profile',
+      index: true,
+      default: null
+    },
     scan_type: {
       type: String,
-      enum: ['ocr', 'barcode'],
+      enum: ['ocr', 'barcode', 'two_sided'],
       required: true
     },
     image_url: {
       type: String,
+      default: null
+    },
+    front_image_url: {
+      type: String,
+      default: null
+    },
+    back_image_url: {
+      type: String,
+      default: null
+    },
+    is_draft: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    field_sources: {
+      type: Map,
+      of: String,
+      default: {}
+    },
+    quality_report: {
+      type: Object,
       default: null
     },
     barcode: {

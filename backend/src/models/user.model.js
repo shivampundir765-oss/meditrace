@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const ROLES = ['patient', 'doctor', 'retailer', 'admin'];
+const ROLES = ['patient', 'pharmacist', 'doctor', 'admin', 'retailer'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -95,6 +95,11 @@ const userSchema = new mongoose.Schema(
       lunch: { type: String, default: '13:00' },
       dinner: { type: String, default: '20:00' },
       bedtime: { type: String, default: '22:00' }
+    },
+    preferred_language: {
+      type: String,
+      enum: ['en', 'hi'],
+      default: 'en'
     }
   },
   {

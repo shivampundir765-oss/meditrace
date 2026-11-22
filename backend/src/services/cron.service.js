@@ -7,9 +7,52 @@ const { createNotification } = require('./notification.service');
 const logger = require('../utils/logger');
 
 /**
+ * 15-Minute Cron Job: Check unconfirmed doses past 2-hour grace period
+ * Marks unconfirmed doses as 'missed' if > 2 hours past scheduled time and still 'scheduled'.
+ */
+const runFifteenMinuteMissedDoseJob = async (gracePeriodHours = 2) => {
+  logger.info(`[CRON] Running 15-minute missed dose check (grace period: ${gracePeriodHours}h)...`);
+  const now = new Date();
+  const graceThreshold = new Date(now.getTime() - gracePeriodHours * 60 * 60 * 1000);
+
+  let missedMarked = 0;
+  try {
+    const overdueDoses = await DoseLog.find({
+      scheduled_time: { $lt: graceThreshold },
+      status: 'scheduled'
+    }).populate('medicine_id', 'name strength');
+
+    for (const dose of overdueDoses) {
+      dose.status = 'missed';
+      await dose.save();
+
+      if (dose.medicine_id) {
+        await createNotification(dose.patient_id, {
+          type: 'dose',
+          title: `Missed Dose: ${dose.medicine_id.name}`,
+          message: `Your scheduled dose of ${dose.medicine_id.name} at ${new Date(dose.scheduled_time).toLocaleTimeString()} was not marked taken within the ${gracePeriodHours}-hour window and is marked missed.`,
+          channel: 'in_app',
+          action_type: 'mark_taken',
+          action_url: `/doses/${dose._id}/take`,
+          reference_id: dose._id
+        });
+        missedMarked++;
+      }
+    }
+
+    if (missedMarked > 0) {
+      logger.info(`[CRON] 15-minute check marked ${missedMarked} doses as missed.`);
+    }
+    return { missedMarked };
+  } catch (err) {
+    logger.error(`[CRON] Error in 15-minute missed dose job: ${err.message}`);
+    throw err;
+  }
+};
+
+/**
  * Hourly Cron Job: Check doses
  * 1. Send reminders for upcoming doses in the next hour
- * 2. Mark doses missed if > 30 mins past scheduled time and still 'scheduled', and send missed alert
  */
 const runHourlyDoseJob = async () => {
   logger.info('[CRON] Running hourly dose check job...');
@@ -192,6 +235,15 @@ const runDailyStockExpiryJob = async () => {
  * Initialize background cron schedules (hourly: 0 * * * *, daily: 0 8 * * *)
  */
 const initCronJobs = () => {
+  // Run 15-minute grace period missed check
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      await runFifteenMinuteMissedDoseJob();
+    } catch (e) {
+      logger.error('[CRON] Failed 15-minute missed dose job:', e);
+    }
+  });
+
   // Run hourly job at minute 0
   cron.schedule('0 * * * *', async () => {
     try {
@@ -210,10 +262,11 @@ const initCronJobs = () => {
     }
   });
 
-  logger.info('Scheduled cron jobs initialized (Hourly Doses & Daily Stock/Expiry).');
+  logger.info('Scheduled cron jobs initialized (15-min Missed Grace, Hourly Doses, Daily Stock/Expiry).');
 };
 
 module.exports = {
+  runFifteenMinuteMissedDoseJob,
   runHourlyDoseJob,
   runDailyStockExpiryJob,
   initCronJobs

@@ -22,6 +22,12 @@ const doseLogSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    profile_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Profile',
+      index: true,
+      default: null
+    },
     scheduled_time: {
       type: Date,
       required: true,
@@ -40,6 +46,10 @@ const doseLogSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    audit_stamp: {
+      type: Object,
+      default: null
     }
   },
   {
@@ -48,6 +58,7 @@ const doseLogSchema = new mongoose.Schema(
 );
 
 doseLogSchema.index({ patient_id: 1, scheduled_time: 1, status: 1 });
+doseLogSchema.index({ profile_id: 1, scheduled_time: 1, status: 1 });
 doseLogSchema.index({ schedule_id: 1, scheduled_time: 1 });
 
 const DoseLog = mongoose.model('DoseLog', doseLogSchema);

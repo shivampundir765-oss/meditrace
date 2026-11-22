@@ -1,8 +1,8 @@
 const { DoseLog } = require('../models/doseLog.model');
 const { Medicine } = require('../models/medicine.model');
 const { DoseSchedule } = require('../models/doseSchedule.model');
-const { Catalog } = require('../models/catalog.model');
-const { CatalogMedicine } = require('../models/catalogMedicine.model');
+const { Cabinet } = require('../models/cabinet.model');
+const { CabinetMedicine } = require('../models/cabinetMedicine.model');
 const { generateDoseLogsForDate } = require('./schedule.service');
 
 class HistoryService {
@@ -29,19 +29,23 @@ class HistoryService {
     const endDate = new Date(dates[dates.length - 1]);
     endDate.setHours(23, 59, 59, 999);
 
-    // 2. Fetch user's catalogs and catalog mappings
-    const catalogs = await Catalog.find({ user_id: patientId }).lean();
-    const catalogMedicines = await CatalogMedicine.find({ user_id: patientId }).lean();
+    // 2. Fetch user's cabinets and cabinet mappings
+    const cabinetFilter = { user_id: patientId };
+    if (profileId) {
+      cabinetFilter.$or = [{ profile_id: profileId }, { profile_id: null }];
+    }
+    const cabinets = await Cabinet.find(cabinetFilter).lean();
+    const cabinetMedicines = await CabinetMedicine.find({ user_id: patientId }).lean();
 
-    const medToCatalogMap = {};
-    catalogMedicines.forEach(cm => {
-      const cat = catalogs.find(c => String(c._id) === String(cm.catalog_id));
-      if (cat) {
-        medToCatalogMap[String(cm.medicine_id)] = {
-          catalog_id: cat._id,
-          catalog_name: cat.name,
-          time_slot: cat.time_slot,
-          color: cat.color
+    const medToCabinetMap = {};
+    cabinetMedicines.forEach(cm => {
+      const cab = cabinets.find(c => String(c._id) === String(cm.cabinet_id));
+      if (cab) {
+        medToCabinetMap[String(cm.medicine_id)] = {
+          cabinet_id: cab._id,
+          cabinet_name: cab.name,
+          time_slot: cab.time_slot,
+          color: cab.color
         };
       }
     });
@@ -95,9 +99,9 @@ class HistoryService {
 
     const matrix = filteredMedicines.map(med => {
       const medIdStr = String(med._id);
-      const catInfo = medToCatalogMap[medIdStr] || {
-        catalog_id: null,
-        catalog_name: 'General',
+      const catInfo = medToCabinetMap[medIdStr] || {
+        cabinet_id: null,
+        cabinet_name: 'General',
         time_slot: 'Morning',
         color: '#0d9488'
       };
@@ -166,7 +170,7 @@ class HistoryService {
           category: med.category || 'Common',
           usedFor: med.usedFor || '',
           quantity: med.quantity,
-          catalog: catInfo
+          cabinet: catInfo
         },
         days: dailyRecords
       };
@@ -216,6 +220,192 @@ class HistoryService {
         mostMissedMedicine: maxMissed > 0 ? mostMissedMedicine : 'None (All on track)'
       },
       matrix
+    };
+  }
+
+  /**
+   * Get complete monthly calendar view for a specific medicine
+   * Month format: 'YYYY-MM' (defaults to current month)
+   */
+  async getMonthlyMedicineHistory(patientId, profileId, medicineId, monthStr) {
+    const now = new Date();
+    let targetYear = now.getFullYear();
+    let targetMonth = now.getMonth(); // 0-indexed
+
+    if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+      const [y, m] = monthStr.split('-').map(Number);
+      targetYear = y;
+      targetMonth = m - 1;
+    }
+
+    const firstDay = new Date(targetYear, targetMonth, 1, 0, 0, 0, 0);
+    const lastDay = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+    const totalDaysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+
+    const formattedMonth = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+
+    // Verify medicine exists
+    const medicine = await Medicine.findById(medicineId).lean();
+    if (!medicine || medicine.is_deleted) {
+      throw new Error('Medicine not found');
+    }
+
+    // Active dose schedule
+    const schedule = await DoseSchedule.findOne({
+      medicine_id: medicineId,
+      patient_id: patientId,
+      is_active: true
+    }).lean();
+
+    // Auto-generate dose logs for all days in this month up to today
+    const dates = [];
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const d = new Date(targetYear, targetMonth, day);
+      dates.push(d.toISOString().split('T')[0]);
+      if (schedule && d <= now) {
+        await generateDoseLogsForDate(schedule, d);
+      }
+    }
+
+    // Auto-mark passed doses as missed if older than current time by > 2 hours and still scheduled
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    await DoseLog.updateMany(
+      {
+        patient_id: patientId,
+        medicine_id: medicineId,
+        status: 'scheduled',
+        scheduled_time: { $lt: twoHoursAgo }
+      },
+      { $set: { status: 'missed' } }
+    );
+
+    // Fetch all logs for this medicine within month
+    const logs = await DoseLog.find({
+      patient_id: patientId,
+      medicine_id: medicineId,
+      scheduled_time: { $gte: firstDay, $lte: lastDay }
+    }).sort({ scheduled_time: 1 }).lean();
+
+    let monthlyScheduledCount = 0;
+    let monthlyTakenCount = 0;
+    let monthlyMissedCount = 0;
+
+    const days = dates.map((dateStr, index) => {
+      const dayNum = index + 1;
+      const dayDate = new Date(dateStr);
+
+      const dayLogs = logs.filter((l) => {
+        const lStr = new Date(l.scheduled_time).toISOString().split('T')[0];
+        return lStr === dateStr;
+      });
+
+      if (dayLogs.length === 0) {
+        return {
+          date: dateStr,
+          day: dayNum,
+          state: 'not_scheduled',
+          total: 0,
+          taken: 0,
+          missed: 0,
+          doses: []
+        };
+      }
+
+      monthlyScheduledCount += dayLogs.length;
+
+      const takenDoses = dayLogs.filter((l) => l.status === 'taken');
+      const missedDoses = dayLogs.filter((l) => l.status === 'missed');
+      const upcomingDoses = dayLogs.filter((l) => l.status === 'scheduled');
+
+      monthlyTakenCount += takenDoses.length;
+      monthlyMissedCount += missedDoses.length;
+
+      let state = 'not_scheduled';
+      if (takenDoses.length === dayLogs.length) {
+        state = 'taken'; // Green
+      } else if (missedDoses.length === dayLogs.length) {
+        state = 'missed'; // Red
+      } else if (takenDoses.length > 0) {
+        state = 'partly_taken'; // Amber
+      } else if (upcomingDoses.length > 0) {
+        state = 'upcoming'; // Grey
+      } else {
+        state = 'missed';
+      }
+
+      return {
+        date: dateStr,
+        day: dayNum,
+        state,
+        total: dayLogs.length,
+        taken: takenDoses.length,
+        missed: missedDoses.length,
+        doses: dayLogs.map((l) => ({
+          _id: l._id,
+          scheduled_time: l.scheduled_time,
+          taken_time: l.taken_time,
+          status: l.status,
+          notes: l.notes
+        }))
+      };
+    });
+
+    const adherencePercentage =
+      monthlyScheduledCount > 0
+        ? Math.round((monthlyTakenCount / monthlyScheduledCount) * 100)
+        : 100;
+
+    return {
+      month: formattedMonth,
+      medicine: {
+        _id: medicine._id,
+        name: medicine.name,
+        nickname: medicine.nickname || '',
+        dosage_form: medicine.dosage_form,
+        strength: medicine.strength,
+        category: medicine.category,
+        usedFor: medicine.usedFor
+      },
+      treatment_period: {
+        start_date: schedule ? schedule.start_date : medicine.created_at,
+        end_date: schedule ? schedule.end_date : null
+      },
+      summary: {
+        total_scheduled: monthlyScheduledCount,
+        total_taken: monthlyTakenCount,
+        total_missed: monthlyMissedCount,
+        adherence_percentage: adherencePercentage
+      },
+      days
+    };
+  }
+
+  /**
+   * Summary overview of dose adherence for a medicine
+   */
+  async getMedicineDoseSummary(patientId, profileId, medicineId) {
+    const medicine = await Medicine.findById(medicineId).lean();
+    if (!medicine || medicine.is_deleted) {
+      throw new Error('Medicine not found');
+    }
+
+    const allLogs = await DoseLog.find({
+      patient_id: patientId,
+      medicine_id: medicineId
+    }).lean();
+
+    const total = allLogs.length;
+    const taken = allLogs.filter((l) => l.status === 'taken').length;
+    const missed = allLogs.filter((l) => l.status === 'missed').length;
+    const adherence = total > 0 ? Math.round((taken / total) * 100) : 100;
+
+    return {
+      medicine_id: medicine._id,
+      name: medicine.name,
+      total_doses: total,
+      taken_doses: taken,
+      missed_doses: missed,
+      adherence_percentage: adherence
     };
   }
 
