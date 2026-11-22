@@ -154,9 +154,11 @@ const createMedicine = async (patientId, profileId, data, editorUser = null, loc
 
   const quantity = Number(enriched.quantity) || 0;
   const originalQuantity = Number(enriched.original_quantity) || quantity;
+  const initialStatus = enriched.status || (enriched.expiry_date && new Date(enriched.expiry_date) < new Date() ? 'expired' : 'active');
 
   const medicine = new Medicine({
     ...enriched,
+    status: initialStatus,
     patient_id: effectivePatientId,
     profile_id: profileId || enriched.profile_id || null,
     quantity,
@@ -235,19 +237,18 @@ const getMedicines = async (patientId, profileId, { page = 1, limit = 50, status
     query.$or = [{ profile_id: profileId }, { profile_id: null }];
   }
 
-  if (status) {
+  const now = new Date();
+  if (status === 'expired' || filter === 'expired') {
+    query.$or = [{ status: 'expired' }, { expiry_date: { $lt: now, $ne: null } }];
+  } else if (status === 'active' || filter === 'active') {
+    query.status = 'active';
+    query.expiry_date = { $not: { $lt: now } };
+  } else if (status) {
     query.status = status;
   }
 
   if (category && ['Common', 'Chronic', 'Serious'].includes(category)) {
     query.category = category;
-  }
-
-  const now = new Date();
-  if (filter === 'expired') {
-    query.expiry_date = { $lt: now, $ne: null };
-  } else if (filter === 'active') {
-    query.status = 'active';
   }
 
   if (search && search.trim()) {

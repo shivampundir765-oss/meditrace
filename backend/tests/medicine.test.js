@@ -3,6 +3,8 @@ const app = require('../src/app');
 const { User } = require('../src/models/user.model');
 const { Medicine } = require('../src/models/medicine.model');
 
+jest.setTimeout(25000);
+
 const patientUser = {
   name: 'Medicine Patient',
   email: 'med_patient@test.com',

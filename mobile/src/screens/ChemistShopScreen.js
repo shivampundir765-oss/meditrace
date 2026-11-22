@@ -97,7 +97,7 @@ export default function ChemistShopScreen() {
     setGenericsLoading(true);
     try {
       const res = await mobileClient.get(`/shop/generics/${item.medicineId || item._id}`);
-      setGenerics(res.data.alternatives || []);
+      setGenerics(res.data?.alternatives || []);
     } catch (_e) {
       setGenerics([]);
     } finally {

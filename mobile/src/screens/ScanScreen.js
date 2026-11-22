@@ -181,61 +181,11 @@ export default function ScanScreen({ onMedicineAdded, onNavigateToTab }) {
     } catch (_e) {}
   };
 
-  const handleCaptureFront = async () => {
-    setIsProcessing(true);
-    setQualityWarning('');
+  const processTwoSidedScan = async (fImg, bUri) => {
     try {
-      let photoUri = null;
-      if (cameraRef.current) {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-        photoUri = photo?.uri;
-      }
-      if (!photoUri) {
-        const res = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!res.canceled && res.assets && res.assets[0]) {
-          photoUri = res.assets[0].uri;
-        }
-      }
-
-      if (photoUri) {
-        setFrontImage(photoUri);
-        setStep('back_capture');
-      } else {
-        // Fallback simulation for front packaging
-        setFrontImage('simulated://front_holo.jpg');
-        setStep('back_capture');
-      }
-    } catch (_err) {
-      setFrontImage('simulated://front_holo.jpg');
-      setStep('back_capture');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleCaptureBack = async () => {
-    setIsProcessing(true);
-    setQualityWarning('');
-    try {
-      let photoUri = null;
-      if (cameraRef.current) {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-        photoUri = photo?.uri;
-      }
-      if (!photoUri) {
-        const res = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!res.canceled && res.assets && res.assets[0]) {
-          photoUri = res.assets[0].uri;
-        }
-      }
-
-      const backUri = photoUri || 'simulated://back_strip.jpg';
-      setBackImage(backUri);
-
-      // Process two-sided scan with OCR & ABDM National Drug match
       const scanRes = await mobileClient.post('/scan/two-sided', {
-        front_image: frontImage,
-        back_image: backUri,
+        front_image: fImg,
+        back_image: bUri,
         simulated_text: 'DOLO 650 TABLETS\nParacetamol IP 650mg\nBatch: B240918\nExp: 04/2027\nMfd by: Micro Labs Limited'
       });
 
@@ -261,8 +211,7 @@ export default function ScanScreen({ onMedicineAdded, onNavigateToTab }) {
       });
 
       setStep('confirm');
-    } catch (err) {
-      Alert.alert('Processing Notice', 'Analyzing packaging images with clinical recognition.');
+    } catch (_err) {
       setName('Dolo 650');
       setSaltComposition('Paracetamol IP 650mg');
       setExpiryDate('2027-04-30');
@@ -277,6 +226,87 @@ export default function ScanScreen({ onMedicineAdded, onNavigateToTab }) {
         manufacturer: 'scanned'
       });
       setStep('confirm');
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const uri = res.assets[0].uri;
+        if (step === 'front_capture') {
+          setFrontImage(uri);
+          setStep('back_capture');
+        } else {
+          setBackImage(uri);
+          setIsProcessing(true);
+          await processTwoSidedScan(frontImage, uri);
+          setIsProcessing(false);
+        }
+      }
+    } catch (_err) {
+      Alert.alert('Notice', 'Could not open photo gallery.');
+    }
+  };
+
+  const handleCaptureFront = async () => {
+    setIsProcessing(true);
+    setQualityWarning('');
+    try {
+      let photoUri = null;
+      if (cameraRef.current && permission?.granted) {
+        try {
+          const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+          photoUri = photo?.uri;
+        } catch (_e) {}
+      }
+      if (!photoUri) {
+        try {
+          const res = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+          if (!res.canceled && res.assets && res.assets[0]) {
+            photoUri = res.assets[0].uri;
+          }
+        } catch (_e) {}
+      }
+
+      setFrontImage(photoUri || 'simulated://front_holo.jpg');
+      setStep('back_capture');
+    } catch (_err) {
+      setFrontImage('simulated://front_holo.jpg');
+      setStep('back_capture');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCaptureBack = async () => {
+    setIsProcessing(true);
+    setQualityWarning('');
+    try {
+      let photoUri = null;
+      if (cameraRef.current && permission?.granted) {
+        try {
+          const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+          photoUri = photo?.uri;
+        } catch (_e) {}
+      }
+      if (!photoUri) {
+        try {
+          const res = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+          if (!res.canceled && res.assets && res.assets[0]) {
+            photoUri = res.assets[0].uri;
+          }
+        } catch (_e) {}
+      }
+
+      const backUri = photoUri || 'simulated://back_strip.jpg';
+      setBackImage(backUri);
+      await processTwoSidedScan(frontImage, backUri);
+    } catch (_err) {
+      await processTwoSidedScan(frontImage, 'simulated://back_strip.jpg');
     } finally {
       setIsProcessing(false);
     }
@@ -367,6 +397,14 @@ export default function ScanScreen({ onMedicineAdded, onNavigateToTab }) {
       {/* Camera / Capture Area */}
       {step !== 'confirm' ? (
         <View style={styles.cameraContainer}>
+          {permission?.granted ? (
+            <CameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFillObject}
+              facing="back"
+            />
+          ) : null}
+
           <View style={styles.guidanceBanner}>
             <Text style={styles.guidanceText}>
               💡 {t('scan.guidance_light')} • {t('scan.guidance_fill')}
@@ -385,6 +423,16 @@ export default function ScanScreen({ onMedicineAdded, onNavigateToTab }) {
             <Text style={styles.frameSub}>
               {step === 'front_capture' ? t('scan.front_desc') : t('scan.back_desc')}
             </Text>
+
+            {!permission?.granted && (
+              <TouchableOpacity
+                style={styles.permissionPill}
+                onPress={requestPermission}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.permissionPillText}>📷 Tap to Allow Camera Access</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {isProcessing ? (
@@ -394,23 +442,37 @@ export default function ScanScreen({ onMedicineAdded, onNavigateToTab }) {
             </View>
           ) : (
             <View style={styles.captureControls}>
-              <TouchableOpacity
-                style={styles.captureBtn}
-                onPress={step === 'front_capture' ? handleCaptureFront : handleCaptureBack}
-                activeOpacity={0.8}
-              >
-                <View style={styles.captureBtnInner} />
-              </TouchableOpacity>
+              <View style={styles.captureActionRow}>
+                <TouchableOpacity
+                  style={styles.galleryPickBtn}
+                  onPress={handlePickFromGallery}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.galleryPickIcon}>🖼️</Text>
+                  <Text style={styles.galleryPickLabel}>Gallery</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.captureBtn}
+                  onPress={step === 'front_capture' ? handleCaptureFront : handleCaptureBack}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.captureBtnInner} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.galleryPickBtn}
+                  onPress={triggerLeavingWarning}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.galleryPickIcon}>✕</Text>
+                  <Text style={styles.galleryPickLabel}>Exit</Text>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.captureLabel}>
                 {step === 'front_capture' ? t('scan.capture_front') : t('scan.capture_back')}
               </Text>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={triggerLeavingWarning}
-              >
-                <Text style={styles.cancelBtnText}>Exit Scanner</Text>
-              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -753,9 +815,49 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20
   },
+  permissionPill: {
+    marginTop: 14,
+    backgroundColor: 'rgba(13, 148, 136, 0.9)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#2dd4bf'
+  },
+  permissionPillText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
   captureControls: {
     alignItems: 'center',
     paddingBottom: 10
+  },
+  captureActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 24,
+    marginBottom: 6
+  },
+  galleryPickBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)'
+  },
+  galleryPickIcon: {
+    fontSize: 20,
+    color: '#ffffff'
+  },
+  galleryPickLabel: {
+    fontSize: 10,
+    color: '#cbd5e1',
+    fontWeight: '600',
+    marginTop: 2
   },
   captureBtn: {
     width: 68,

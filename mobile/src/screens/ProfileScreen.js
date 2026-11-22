@@ -38,6 +38,12 @@ export default function ProfileScreen({ user, onLogout }) {
   // Legal & Medical Notice Modal
   const [showNoticeModal, setShowNoticeModal] = useState(false);
 
+  // Backend Server Connection & Offline Mode State
+  const [serverUrl, setServerUrl] = useState('');
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null);
+
   useEffect(() => {
     loadSettings();
   }, []);
@@ -48,7 +54,46 @@ export default function ProfileScreen({ user, onLogout }) {
       if (storedPush !== null) {
         setPushEnabled(storedPush === 'true');
       }
+      const storedUrl = await storage.getItem('meditrace_server_url');
+      if (storedUrl) setServerUrl(storedUrl);
+      const storedOffline = await storage.getItem('meditrace_offline_mode');
+      if (storedOffline !== null) setOfflineMode(storedOffline === 'true');
     } catch (_e) {}
+  };
+
+  const handleToggleOfflineMode = async (val) => {
+    setOfflineMode(val);
+    await mobileClient.setOfflineMode(val);
+    Alert.alert(
+      val ? 'Standalone Offline Mode Enabled' : 'Online Sync Mode Enabled',
+      val
+        ? 'App is operating with local storage only. No network requests are made.'
+        : 'App will now connect to the specified backend server.'
+    );
+  };
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setConnectionStatus(null);
+    try {
+      const ok = await mobileClient.testConnection(serverUrl.trim());
+      setConnectionStatus(ok ? 'connected' : 'failed');
+      if (ok) {
+        Alert.alert('Connection Successful', `Connected to MediTrace API at ${serverUrl.trim() || 'default URL'}`);
+      } else {
+        Alert.alert('Connection Failed', `Could not reach ${serverUrl.trim() || 'default URL'}. Using automatic local demo fallback.`);
+      }
+    } catch (_e) {
+      setConnectionStatus('failed');
+      Alert.alert('Connection Notice', 'Could not reach server. Automatic demo fallback active.');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSaveServerUrl = async () => {
+    await mobileClient.setServerUrl(serverUrl.trim());
+    Alert.alert('Server URL Saved', serverUrl.trim() ? `Server set to ${serverUrl.trim()}` : 'Reset to default backend address.');
   };
 
   const handleTogglePush = async (val) => {
@@ -213,6 +258,67 @@ export default function ProfileScreen({ user, onLogout }) {
             thumbColor={pushEnabled ? '#0d9488' : '#94a3b8'}
           />
         </View>
+      </View>
+
+      {/* Backend Server & Standalone Mode Card */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>Backend Connection &amp; Mode</Text>
+        <Text style={styles.sectionSub}>
+          Configure custom server IP (e.g. for testing over local Wi-Fi) or enable Standalone Offline Mode.
+        </Text>
+
+        <View style={styles.switchRow}>
+          <View style={styles.switchTextWrap}>
+            <Text style={styles.modeOptionTitle}>Standalone / Offline Mode</Text>
+            <Text style={styles.modeOptionSub}>
+              Use local on-device database without network delays.
+            </Text>
+          </View>
+          <Switch
+            value={offlineMode}
+            onValueChange={handleToggleOfflineMode}
+            trackColor={{ false: '#cbd5e1', true: '#99f6e4' }}
+            thumbColor={offlineMode ? '#0d9488' : '#94a3b8'}
+          />
+        </View>
+
+        {!offlineMode && (
+          <View style={styles.serverConfigBox}>
+            <Text style={styles.inputLabel}>Server Base URL (Optional)</Text>
+            <TextInput
+              style={styles.serverInput}
+              placeholder="e.g. http://192.168.1.15:5000/api/v1"
+              value={serverUrl}
+              onChangeText={setServerUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.serverBtnRow}>
+              <TouchableOpacity
+                style={styles.saveUrlBtn}
+                onPress={handleSaveServerUrl}
+              >
+                <Text style={styles.saveUrlBtnText}>Save URL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.testUrlBtn}
+                onPress={handleTestConnection}
+                disabled={testingConnection}
+              >
+                {testingConnection ? (
+                  <ActivityIndicator size="small" color="#0d9488" />
+                ) : (
+                  <Text style={styles.testUrlBtnText}>Test Connection</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            {connectionStatus && (
+              <Text style={[styles.connectionStatusText, connectionStatus === 'connected' ? styles.statusConnected : styles.statusFailed]}>
+                {connectionStatus === 'connected' ? '✓ Server reachable' : '✕ Server unreachable - using demo fallback'}
+              </Text>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Important Medical and Legal Notice Button */}
@@ -785,5 +891,74 @@ const styles = StyleSheet.create({
     color: '#b91c1c',
     fontSize: 13,
     fontWeight: '700'
+  },
+  modeOptionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  modeOptionSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  serverConfigBox: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9'
+  },
+  serverInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    fontSize: 12,
+    color: '#0f172a',
+    marginTop: 4
+  },
+  serverBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8
+  },
+  saveUrlBtn: {
+    flex: 1,
+    backgroundColor: '#0d9488',
+    paddingVertical: 9,
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  saveUrlBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  testUrlBtn: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 9,
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  testUrlBtnText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  connectionStatusText: {
+    fontSize: 11,
+    marginTop: 6,
+    fontWeight: '600'
+  },
+  statusConnected: {
+    color: '#15803d'
+  },
+  statusFailed: {
+    color: '#b91c1c'
   }
 });

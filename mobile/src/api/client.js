@@ -122,6 +122,7 @@ const INITIAL_DEMO_CABINETS = [
 let cachedCabinets = null;
 let cachedProfiles = null;
 let cachedDraft = null;
+let cachedOrders = [];
 
 async function getDemoProfiles() {
   if (cachedProfiles) return cachedProfiles;
@@ -223,6 +224,64 @@ export const DEMO_HEALTHCARE_PLACES = [
     coordinates: { latitude: 12.9592, longitude: 77.6515 },
     google_maps_url: 'https://www.google.com/maps/dir/?api=1&destination=12.9592,77.6515',
     services: ['24/7 Level 1 Trauma', 'Cardiac CCU', 'Blood Bank', 'Dialysis']
+  },
+  {
+    _id: 'fac-3',
+    name: 'MedPlus Pharmacy & Wellness',
+    type: 'chemist',
+    phone: '+91 80 2520 8899',
+    opening_hours: '08:00 AM - 11:00 PM',
+    is_emergency_24x7: false,
+    distanceKm: 1.4,
+    address: { street: '100ft Road, HAL 2nd Stage', city: 'Bangalore' },
+    coordinates: { latitude: 12.9720, longitude: 77.6420 },
+    google_maps_url: 'https://www.google.com/maps/dir/?api=1&destination=12.9720,77.6420',
+    services: ['Generic Medicines', 'Home Delivery', 'Health Checks']
+  }
+];
+
+export const DEMO_SHOP_PRODUCTS = [
+  {
+    _id: 'shop-1',
+    medicineId: 'med-01',
+    name: 'Dolo 650 (Paracetamol IP 650mg)',
+    price: 32.50,
+    mrp: 35.00,
+    dosageForm: 'tablet',
+    brandName: 'Dolo 650',
+    manufacturer: 'Micro Labs Ltd',
+    packSize: '15 Tablets Strip',
+    inStock: true,
+    requiresPrescription: false,
+    retailer: { _id: 'ret-1', name: 'Apollo Pharmacy Indiranagar', address: 'HAL 2nd Stage' }
+  },
+  {
+    _id: 'shop-2',
+    medicineId: 'med-03',
+    name: 'Telma 40 (Telmisartan IP 40mg)',
+    price: 185.00,
+    mrp: 210.00,
+    dosageForm: 'tablet',
+    brandName: 'Telma 40',
+    manufacturer: 'Glenmark Pharmaceuticals',
+    packSize: '15 Tablets Strip',
+    inStock: true,
+    requiresPrescription: true,
+    retailer: { _id: 'ret-1', name: 'Apollo Pharmacy Indiranagar', address: 'HAL 2nd Stage' }
+  },
+  {
+    _id: 'shop-3',
+    medicineId: 'med-02',
+    name: 'Combiflam (Ibuprofen 400mg + Paracetamol 325mg)',
+    price: 45.00,
+    mrp: 52.00,
+    dosageForm: 'tablet',
+    brandName: 'Combiflam',
+    manufacturer: 'Sanofi India Ltd',
+    packSize: '20 Tablets Strip',
+    inStock: true,
+    requiresPrescription: false,
+    retailer: { _id: 'ret-2', name: 'MedPlus Pharmacy', address: '100ft Road' }
   }
 ];
 
@@ -272,6 +331,7 @@ async function handleDemoRequest(method, endpoint, options) {
         _id: 'cab-' + Date.now(),
         name: parsed.name || 'New Cabinet',
         medical_condition: parsed.medical_condition || parsed.name || 'General',
+        condition_code: (parsed.medical_condition || 'general').toLowerCase().replace(/\s+/g, '_'),
         time_slot: parsed.time_slot || 'Morning',
         medicines_count: 0,
         stock_status: { in_stock: 0, few_left: 0, out_of_stock: 0 },
@@ -281,6 +341,28 @@ async function handleDemoRequest(method, endpoint, options) {
       await saveDemoCabinets(cabinets);
       return { success: true, data: { cabinet: newCab } };
     }
+  }
+
+  // Prescriptions
+  if (endpoint.startsWith('/prescriptions')) {
+    if (method === 'POST') {
+      const parsed = options.body ? JSON.parse(options.body) : {};
+      const cabinets = await getDemoCabinets();
+      const targetCab = cabinets.find(c => c._id === parsed.cabinet_id) || cabinets[0];
+      if (targetCab) {
+        if (!targetCab.prescriptions) targetCab.prescriptions = [];
+        targetCab.prescriptions.push({
+          _id: 'presc-' + Date.now(),
+          doctor_name: parsed.doctor_name || 'Dr. Sharma',
+          diagnosis: parsed.diagnosis || '',
+          notes: parsed.notes || '',
+          created_at: new Date().toISOString()
+        });
+        await saveDemoCabinets(cabinets);
+      }
+      return { success: true, message: 'Prescription recorded successfully', data: { prescription: parsed } };
+    }
+    return { success: true, data: { prescriptions: [] } };
   }
 
   // Medicines
@@ -368,9 +450,9 @@ async function handleDemoRequest(method, endpoint, options) {
         category: parsed.category || 'Common',
         usedFor: parsed.usedFor || '',
         cautions: parsed.cautions || '',
-        entered_by_role: 'pharmacist',
-        entered_by_label: 'Entered by Pharmacist',
-        field_sources: {
+        entered_by_role: parsed.entered_by_role || 'pharmacist',
+        entered_by_label: parsed.entered_by_label || 'Entered by Pharmacist',
+        field_sources: parsed.field_sources || {
           name: 'scanned',
           salt_composition: 'database',
           expiry_date: 'manual',
@@ -382,9 +464,25 @@ async function handleDemoRequest(method, endpoint, options) {
           location_name: 'Bangalore Medical Store'
         }
       };
-      if (cabinets.length > 0) {
-        cabinets[0].medicines.push(newMed);
-        cabinets[0].medicines_count = cabinets[0].medicines.length;
+
+      const targetCabId = parsed.cabinet_id || parsed.catalog_id;
+      let targetCab = cabinets.find(c => c._id === targetCabId);
+      if (!targetCab && cabinets.length > 0) targetCab = cabinets[0];
+
+      if (targetCab) {
+        if (!targetCab.medicines) targetCab.medicines = [];
+        targetCab.medicines.push(newMed);
+        targetCab.medicines_count = targetCab.medicines.length;
+
+        // Recalculate stock counters
+        let inStock = 0, fewLeft = 0, outStock = 0;
+        targetCab.medicines.forEach(m => {
+          if (m.quantity <= 0) outStock++;
+          else if (m.quantity <= (m.stock_threshold || 4)) fewLeft++;
+          else inStock++;
+        });
+        targetCab.stock_status = { in_stock: inStock, few_left: fewLeft, out_of_stock: outStock };
+
         await saveDemoCabinets(cabinets);
       }
       return { success: true, data: { medicine: newMed } };
@@ -465,6 +563,25 @@ async function handleDemoRequest(method, endpoint, options) {
     };
   }
 
+  // Dose Take / Skip
+  if (endpoint.includes('/doses/') && endpoint.endsWith('/take')) {
+    const cabinets = await getDemoCabinets();
+    // Decrement stock for the first in-stock medicine
+    if (cabinets.length > 0 && cabinets[0].medicines?.length > 0) {
+      const med = cabinets[0].medicines[0];
+      if (med.quantity > 0) med.quantity -= 1;
+      let inStock = 0, fewLeft = 0, outStock = 0;
+      cabinets[0].medicines.forEach(m => {
+        if (m.quantity <= 0) outStock++;
+        else if (m.quantity <= (m.stock_threshold || 4)) fewLeft++;
+        else inStock++;
+      });
+      cabinets[0].stock_status = { in_stock: inStock, few_left: fewLeft, out_of_stock: outStock };
+      await saveDemoCabinets(cabinets);
+    }
+    return { success: true, message: 'Dose marked as taken and stock updated.' };
+  }
+
   // Schedule
   if (endpoint.startsWith('/schedule/today')) {
     return {
@@ -482,21 +599,89 @@ async function handleDemoRequest(method, endpoint, options) {
     };
   }
 
+  // Places / Healthcare Facilities
   if (endpoint.startsWith('/chemists/nearby') || endpoint.startsWith('/places/nearby')) {
     return { success: true, data: { facilities: DEMO_HEALTHCARE_PLACES, chemists: DEMO_HEALTHCARE_PLACES } };
+  }
+
+  // Shop & Generics
+  if (endpoint.startsWith('/shop/search')) {
+    return { success: true, data: { results: DEMO_SHOP_PRODUCTS } };
+  }
+
+  if (endpoint.startsWith('/shop/generics')) {
+    return {
+      success: true,
+      data: {
+        alternatives: [
+          {
+            _id: 'gen-01',
+            brand_name: 'Paracetamol IP Generic',
+            manufacturer: 'Jan Aushadhi',
+            price: 12.00,
+            original_price: 32.50,
+            savings_percentage: 63
+          }
+        ]
+      }
+    };
+  }
+
+  // Orders
+  if (endpoint.startsWith('/orders')) {
+    if (method === 'POST') {
+      const parsed = options.body ? JSON.parse(options.body) : {};
+      const newOrder = {
+        _id: 'ord-' + Date.now(),
+        items: parsed.items || [{ name: 'Dolo 650', quantity: 1, price: 32.50 }],
+        totalAmount: 32.50,
+        status: 'placed',
+        createdAt: new Date().toISOString()
+      };
+      cachedOrders.unshift(newOrder);
+      return { success: true, data: { order: newOrder } };
+    }
+    return { success: true, data: { orders: cachedOrders.length > 0 ? cachedOrders : [
+      {
+        _id: 'ord-prev-1',
+        items: [{ name: 'Telma 40', quantity: 1, price: 185.00 }],
+        totalAmount: 185.00,
+        status: 'delivered',
+        createdAt: new Date(Date.now() - 3 * 86400000).toISOString()
+      }
+    ] } };
   }
 
   return { success: true, data: {} };
 }
 
+export async function getEffectiveApiUrl() {
+  try {
+    const custom = await storage.getItem('meditrace_server_url');
+    if (custom && custom.trim().length > 0) return custom.trim();
+  } catch (_e) {}
+  return API_BASE_URL;
+}
+
+export async function isOfflineMode() {
+  try {
+    const offline = await storage.getItem('meditrace_offline_mode');
+    return offline === 'true';
+  } catch (_e) {
+    return false;
+  }
+}
+
 async function request(endpoint, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
 
-  if (DEMO_MODE) {
+  const offline = await isOfflineMode();
+  if (DEMO_MODE || offline) {
     return handleDemoRequest(method, endpoint, options);
   }
 
-  const url = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = await getEffectiveApiUrl();
+  const url = `${baseUrl}${endpoint}`;
   const accessToken = await storage.getItem('meditrace_access_token');
   const profileId = await storage.getItem('meditrace_profile_id');
 
@@ -507,8 +692,26 @@ async function request(endpoint, options = {}) {
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
   if (profileId) headers['x-profile-id'] = profileId;
 
+  // AbortController timeout of 1500ms
+  let controller = null;
+  let timeoutId = null;
   try {
-    const response = await fetch(url, { ...options, headers });
+    if (typeof AbortController !== 'undefined') {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 1500);
+    }
+  } catch (_e) {}
+
+  try {
+    const fetchOptions = {
+      ...options,
+      headers,
+      ...(controller ? { signal: controller.signal } : {})
+    };
+
+    const response = await fetch(url, fetchOptions);
+    if (timeoutId) clearTimeout(timeoutId);
+
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(json.message || `Request failed with status ${response.status}`);
@@ -517,7 +720,8 @@ async function request(endpoint, options = {}) {
     }
     return json;
   } catch (_e) {
-    // If backend connection fails or offline, provide graceful fallback
+    if (timeoutId) clearTimeout(timeoutId);
+    // If backend connection times out, fails, or phone is offline, provide graceful fallback
     return handleDemoRequest(method, endpoint, options);
   }
 }
@@ -526,7 +730,36 @@ export const mobileClient = {
   get: (endpoint) => request(endpoint, { method: 'GET' }),
   post: (endpoint, body) => request(endpoint, { method: 'POST', body: JSON.stringify(body) }),
   put: (endpoint, body) => request(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
-  delete: (endpoint) => request(endpoint, { method: 'DELETE' })
+  delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
+
+  getEffectiveApiUrl,
+  isOfflineMode,
+
+  setServerUrl: async (url) => {
+    if (url && url.trim().length > 0) {
+      await storage.setItem('meditrace_server_url', url.trim());
+    } else {
+      await storage.removeItem('meditrace_server_url');
+    }
+  },
+
+  setOfflineMode: async (offline) => {
+    await storage.setItem('meditrace_offline_mode', offline ? 'true' : 'false');
+  },
+
+  testConnection: async (targetUrl) => {
+    const url = (targetUrl || await getEffectiveApiUrl()) + '/health';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+      return res.ok;
+    } catch (_e) {
+      clearTimeout(timeout);
+      return false;
+    }
+  }
 };
 
 export default mobileClient;

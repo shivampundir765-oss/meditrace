@@ -201,8 +201,11 @@ const processOcrScan = async (patientId, { raw_text, image_url }) => {
     confidence = Math.max(confidence, 96);
   }
 
+  const matchedBrandDirectly = abdmMatch && cleanedText.toLowerCase().includes(abdmMatch.brand_name.toLowerCase());
+  const finalName = matchedBrandDirectly ? abdmMatch.brand_name : (extracted_name || (abdmMatch ? abdmMatch.brand_name : 'Scanned Medicine'));
+
   const autofill_data = {
-    name: abdmMatch ? abdmMatch.brand_name : (extracted_name || 'Scanned Medicine'),
+    name: finalName,
     generic_name: abdmMatch ? abdmMatch.generic_name : extracted_name,
     salt_composition: abdmMatch ? abdmMatch.salt_composition : '',
     dosage_form: abdmMatch ? abdmMatch.dosage_form : (/capsule|cap\b/i.test(cleanedText) ? 'capsule' : (/syrup/i.test(cleanedText) ? 'syrup' : 'tablet')),
@@ -236,10 +239,10 @@ const processOcrScan = async (patientId, { raw_text, image_url }) => {
     scan_type: 'ocr',
     image_url: image_url || null,
     raw_text: cleanedText,
-    extracted_name: autofill_data.name,
+    extracted_name: extracted_name || autofill_data.name,
     extracted_expiry: autofill_data.expiry_date,
-    extracted_batch: autofill_data.batch_number,
-    extracted_manufacturer: autofill_data.manufacturer,
+    extracted_batch: extracted_batch || autofill_data.batch_number,
+    extracted_manufacturer: extracted_manufacturer || autofill_data.manufacturer,
     confidence,
     autofill_data,
     abdm_registry: abdmMatch || null
@@ -263,9 +266,39 @@ const processBarcodeScan = async (patientId, barcode) => {
   let confidence = 0;
   let autofill_data;
 
-  if (abdmMatch) {
+  if (known) {
+    extracted_name = known.name;
+    extracted_batch = known.batch_number;
+    extracted_manufacturer = known.manufacturer;
+    confidence = 98; // High confidence from direct barcode match
+
+    const expDate = new Date();
+    expDate.setMonth(expDate.getMonth() + (known.expiry_months_ahead || 18));
+    extracted_expiry = expDate;
+
+    autofill_data = {
+      name: known.name,
+      generic_name: known.generic_name,
+      salt_composition: known.salt_composition,
+      dosage_form: known.dosage_form,
+      strength: known.strength,
+      manufacturer: known.manufacturer,
+      batch_number: known.batch_number,
+      expiry_date: extracted_expiry,
+      quantity: 10,
+      low_stock_threshold: 5,
+      requires_prescription: known.requires_prescription,
+      abdm_drug_code: abdmMatch ? abdmMatch.abdm_drug_code : 'IN-NHA-DRG-PROVISIONAL',
+      therapeutic_class: abdmMatch ? abdmMatch.therapeutic_class : 'General Pharmaceutical',
+      schedule_classification: abdmMatch ? abdmMatch.schedule_classification : (known.requires_prescription ? 'Schedule H' : 'OTC'),
+      schedule_warning: abdmMatch ? abdmMatch.schedule_warning : (known.requires_prescription ? 'Schedule H Prescription Drug' : ''),
+      cdsco_approval_status: abdmMatch ? abdmMatch.cdsco_approval_status : 'Approved - CDSCO National Formulary',
+      storage_guidelines: abdmMatch ? abdmMatch.storage_guidelines : 'Store below 25°C in a dry place.',
+      dosage_instructions: abdmMatch ? abdmMatch.dosage_instructions : 'Take as prescribed by medical practitioner.'
+    };
+  } else if (abdmMatch) {
     extracted_name = abdmMatch.brand_name;
-    extracted_batch = known ? known.batch_number : `B24-${cleanBarcode.slice(-4)}`;
+    extracted_batch = `B24-${cleanBarcode.slice(-4)}`;
     extracted_manufacturer = abdmMatch.manufacturer_name;
     confidence = 99; // Official ABDM Registry Verified
     const expDate = new Date();
@@ -292,40 +325,10 @@ const processBarcodeScan = async (patientId, barcode) => {
       storage_guidelines: abdmMatch.storage_guidelines,
       dosage_instructions: abdmMatch.dosage_instructions
     };
-  } else if (known) {
-    extracted_name = known.name;
-    extracted_batch = known.batch_number;
-    extracted_manufacturer = known.manufacturer;
-    confidence = 98; // High confidence from direct barcode match
-
-    const expDate = new Date();
-    expDate.setMonth(expDate.getMonth() + (known.expiry_months_ahead || 18));
-    extracted_expiry = expDate;
-
-    autofill_data = {
-      name: known.name,
-      generic_name: known.generic_name,
-      salt_composition: known.salt_composition,
-      dosage_form: known.dosage_form,
-      strength: known.strength,
-      manufacturer: known.manufacturer,
-      batch_number: known.batch_number,
-      expiry_date: extracted_expiry,
-      quantity: 10,
-      low_stock_threshold: 5,
-      requires_prescription: known.requires_prescription,
-      abdm_drug_code: 'IN-NHA-DRG-PROVISIONAL',
-      therapeutic_class: 'General Pharmaceutical',
-      schedule_classification: known.requires_prescription ? 'Schedule H' : 'OTC',
-      schedule_warning: known.requires_prescription ? 'Schedule H Prescription Drug' : '',
-      cdsco_approval_status: 'Approved - CDSCO National Formulary',
-      storage_guidelines: 'Store below 25°C in a dry place.',
-      dosage_instructions: 'Take as prescribed by medical practitioner.'
-    };
   } else {
     // Unknown barcode: generate skeleton structure with moderate confidence
     extracted_name = `Medicine (Barcode ${cleanBarcode})`;
-    confidence = 65;
+    confidence = 50;
     autofill_data = {
       name: extracted_name,
       generic_name: '',
