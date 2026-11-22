@@ -35,9 +35,9 @@ export default function DoctorsPage() {
       if (specialization) params.specialization = specialization;
       if (city) params.city = city;
       const res = await apiClient.get('/doctors', { params });
-      setDoctors(res.data.data.doctors || []);
+      setDoctors(res.data?.doctors || res.data?.data?.doctors || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch doctors');
+      setError(err.response?.data?.message || err.message || 'Failed to fetch doctors');
     } finally {
       setLoading(false);
     }
@@ -48,9 +48,9 @@ export default function DoctorsPage() {
     setError('');
     try {
       const res = await apiClient.get('/appointments/my');
-      setAppointments(res.data.data.appointments || []);
+      setAppointments(res.data?.appointments || res.data?.data?.appointments || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch appointments');
+      setError(err.response?.data?.message || err.message || 'Failed to fetch appointments');
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export default function DoctorsPage() {
       const res = await apiClient.get(`/doctors/${doctorId}/slots`, {
         params: { date }
       });
-      setAvailableSlots(res.data.data.slots || []);
+      setAvailableSlots(res.data?.slots || res.data?.data?.slots || []);
     } catch (err) {
       setAvailableSlots([]);
     } finally {

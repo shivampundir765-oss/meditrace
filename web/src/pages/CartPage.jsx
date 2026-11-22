@@ -28,7 +28,7 @@ export default function CartPage() {
     if (rxMandatory) {
       apiClient.get('/prescriptions')
         .then(res => {
-          const list = res.data.data.prescriptions || [];
+          const list = res.data?.prescriptions || res.data?.data?.prescriptions || [];
           setPrescriptions(list);
           if (list.length > 0) setSelectedPrescriptionId(list[0]._id);
         })
@@ -71,7 +71,7 @@ export default function CartPage() {
       };
 
       const res = await apiClient.post('/orders', orderPayload);
-      const createdOrder = res.data.data.order;
+      const createdOrder = res.data?.order || res.data?.data?.order;
 
       // If test payment gateway chosen, simulate payment session & webhook confirmation
       if (paymentMethod === 'card') {
@@ -79,7 +79,7 @@ export default function CartPage() {
           orderId: createdOrder._id,
           gateway: 'razorpay'
         });
-        const paymentSession = sessionRes.data.data;
+        const paymentSession = sessionRes.data?.paymentSession || sessionRes.data?.data || sessionRes.data;
 
         // Auto-confirm test mode payment
         await apiClient.post('/payments/webhook', {

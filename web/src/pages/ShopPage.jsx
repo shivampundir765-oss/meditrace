@@ -24,9 +24,9 @@ export default function ShopPage() {
       const res = await apiClient.get('/shop/search', {
         params: { query: query.trim() || undefined }
       });
-      setMedicines(res.data.data.results || []);
+      setMedicines(res.data?.results || res.data?.data?.results || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to search medicines');
+      setError(err.response?.data?.message || err.message || 'Failed to search medicines');
     } finally {
       setLoading(false);
     }
@@ -41,7 +41,7 @@ export default function ShopPage() {
     setGenericsLoading(true);
     try {
       const res = await apiClient.get(`/shop/generics/${med.medicineId || med._id}`);
-      setGenerics(res.data.data.alternatives || []);
+      setGenerics(res.data?.alternatives || res.data?.data?.alternatives || []);
     } catch (err) {
       setGenerics([]);
     } finally {

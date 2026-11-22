@@ -40,7 +40,8 @@ export default function ProfilePage() {
   useEffect(() => {
     apiClient.get('/users/me')
       .then(res => {
-        const u = res.data.data.user;
+        const u = res.data?.user || res.data?.data?.user;
+        if (!u) return;
         setUser(u);
         setFormData({
           name: u.name || '',
@@ -79,7 +80,8 @@ export default function ProfilePage() {
         quietHoursEnd: notificationPrefs.quietHoursEnd
       });
 
-      setUser(res.data.data.user);
+      const updatedUser = res.data?.user || res.data?.data?.user;
+      if (updatedUser) setUser(updatedUser);
       setSuccess('Profile and preferences updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {

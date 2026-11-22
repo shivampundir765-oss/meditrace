@@ -27,7 +27,7 @@ export default function RetailerDashboardPage() {
   const fetchProfile = async () => {
     try {
       const res = await apiClient.get('/retailer/profile');
-      setProfile(res.data.data.retailer || null);
+      setProfile(res.data?.retailer || res.data?.data?.retailer || null);
     } catch (err) {
       // Maybe not created yet
     }
@@ -37,7 +37,7 @@ export default function RetailerDashboardPage() {
     setLoading(true);
     try {
       const res = await apiClient.get('/retailer/inventory');
-      setInventory(res.data.data.inventory || []);
+      setInventory(res.data?.inventory || res.data?.data?.inventory || []);
     } catch (err) {
       setError('Failed to fetch inventory');
     } finally {
@@ -49,7 +49,7 @@ export default function RetailerDashboardPage() {
     setLoading(true);
     try {
       const res = await apiClient.get('/orders/retailer');
-      setOrders(res.data.data.orders || []);
+      setOrders(res.data?.orders || res.data?.data?.orders || []);
     } catch (err) {
       setError('Failed to fetch store orders');
     } finally {

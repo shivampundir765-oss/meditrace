@@ -21,7 +21,7 @@ export default function OrdersPage() {
     setError('');
     try {
       const res = await apiClient.get('/orders');
-      setOrders(res.data.data.orders || []);
+      setOrders(res.data?.orders || res.data?.data?.orders || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch your orders');
     } finally {

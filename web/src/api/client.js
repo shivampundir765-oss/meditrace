@@ -21,7 +21,22 @@ api.interceptors.request.use(
 
 // Response interceptor: handle token refresh or errors
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    const body = response.data;
+    // Support both res.data.users AND res.data.data.users seamlessly
+    if (body && typeof body === 'object' && body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
+      if (!('data' in body.data)) {
+        Object.defineProperty(body.data, 'data', {
+          get() {
+            return this;
+          },
+          configurable: true,
+          enumerable: false
+        });
+      }
+    }
+    return body;
+  },
   async (error) => {
     const originalRequest = error.config;
     if (error.response?.status === 401 && !originalRequest._retry) {

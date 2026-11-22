@@ -15,7 +15,7 @@ export default function AdminPage() {
       const params = {};
       if (roleFilter) params.role = roleFilter;
       const res = await apiClient.get('/admin/users', { params });
-      setUsers(res.data.data.users || []);
+      setUsers(res.data?.users || res.data?.data?.users || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch user directory');
     } finally {

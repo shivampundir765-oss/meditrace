@@ -6,6 +6,7 @@ import useAuthStore from './store/useAuthStore';
 import Navbar from './components/common/Navbar';
 import Footer from './components/common/Footer';
 import DisclaimerBanner from './components/common/DisclaimerBanner';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
 import HomePage from './pages/HomePage';
@@ -16,6 +17,7 @@ import PrescriptionsPage from './pages/PrescriptionsPage';
 import StockPage from './pages/StockPage';
 import ScanPage from './pages/ScanPage';
 import ChemistFinderPage from './pages/ChemistFinderPage';
+import HistoryPage from './pages/HistoryPage';
 import DoctorsPage from './pages/DoctorsPage';
 import ShopPage from './pages/ShopPage';
 import CartPage from './pages/CartPage';
@@ -56,27 +58,40 @@ export default function App() {
   }, [isAuthenticated]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900 selection:bg-primary-500 selection:text-white">
-      <DisclaimerBanner />
-      <Navbar />
+    <ErrorBoundary>
+      <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900 selection:bg-teal-500 selection:text-white">
+        <DisclaimerBanner />
+        <Navbar />
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/chemists" element={<ChemistFinderPage />} />
-          <Route path="/shop" element={<ShopPage />} />
+        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/login" element={<AuthPage />} />
+            <Route path="/register" element={<AuthPage />} />
+            <Route path="/chemists" element={<ChemistFinderPage />} />
+            <Route path="/nearby" element={<ChemistFinderPage />} />
+            <Route path="/places" element={<ChemistFinderPage />} />
+            <Route path="/shop" element={<ShopPage />} />
 
-          {/* Protected Patient / General Routes */}
-          <Route
-            path="/schedule"
-            element={
-              <ProtectedRoute>
-                <SchedulePage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected Patient / General Routes */}
+            <Route
+              path="/schedule"
+              element={
+                <ProtectedRoute>
+                  <SchedulePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <HistoryPage />
+                </ProtectedRoute>
+              }
+            />
           <Route
             path="/medicines"
             element={
@@ -167,5 +182,6 @@ export default function App() {
 
       <Footer />
     </div>
+    </ErrorBoundary>
   );
 }

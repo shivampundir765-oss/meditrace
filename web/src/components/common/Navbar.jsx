@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCartStore } from '../../store/useCartStore';
 import NotificationBell from './NotificationBell';
+import MeditraceLogo from './MeditraceLogo';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -37,9 +38,10 @@ export default function Navbar() {
   const navLinks = [
     { name: 'Schedule', path: '/schedule', icon: Calendar, public: false },
     { name: 'Medicines', path: '/medicines', icon: Pill, public: false },
+    { name: 'History', path: '/history', icon: Calendar, public: false },
     { name: 'Stock', path: '/stock', icon: Clock, public: false },
     { name: 'Scan', path: '/scan', icon: Scan, public: false },
-    { name: 'Chemists', path: '/chemists', icon: MapPin, public: true },
+    { name: 'Nearby', path: '/chemists', icon: MapPin, public: true },
     { name: 'Doctors', path: '/doctors', icon: UserCheck, public: true },
     { name: 'Shop', path: '/shop', icon: ShoppingBag, public: true },
   ];
@@ -59,13 +61,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-sm">
-              <Pill className="w-5 h-5 transform -rotate-45" />
-            </div>
-            <span className="font-bold text-xl text-slate-900 tracking-tight">
-              Medi<span className="text-brand-600">trace</span>
-            </span>
+          <Link to="/" className="flex items-center">
+            <MeditraceLogo className="w-9 h-9" withText={true} textClassName="text-xl" />
           </Link>
 
           {/* Desktop Nav Items */}
