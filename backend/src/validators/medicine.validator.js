@@ -16,8 +16,15 @@ const createMedicineSchema = z.object({
   notes: z.string().trim().optional(),
   status: z.enum(['active', 'completed', 'expired', 'discontinued']).default('active'),
   added_via: z.enum(ADDED_VIA).default('manual'),
-  requires_prescription: z.boolean().default(false)
-});
+  requires_prescription: z.boolean().default(false),
+  abdm_drug_code: z.string().optional(),
+  therapeutic_class: z.string().optional(),
+  schedule_classification: z.string().optional(),
+  schedule_warning: z.string().optional(),
+  cdsco_approval_status: z.string().optional(),
+  storage_guidelines: z.string().optional(),
+  dosage_instructions: z.string().optional()
+}).passthrough();
 
 const updateMedicineSchema = z.object({
   name: z.string().min(1).trim().optional(),
@@ -34,7 +41,7 @@ const updateMedicineSchema = z.object({
   notes: z.string().trim().optional(),
   status: z.enum(['active', 'completed', 'expired', 'discontinued']).optional(),
   requires_prescription: z.boolean().optional()
-});
+}).passthrough();
 
 module.exports = {
   createMedicineSchema,

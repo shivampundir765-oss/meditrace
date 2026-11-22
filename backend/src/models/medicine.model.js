@@ -41,6 +41,36 @@ const medicineSchema = new mongoose.Schema(
       enum: DOSAGE_FORMS,
       default: 'tablet'
     },
+    nickname: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    usedFor: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    category: {
+      type: String,
+      enum: ['Common', 'Chronic', 'Serious'],
+      default: 'Common'
+    },
+    cautions: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    source: {
+      type: String,
+      enum: ['scan', 'manual', 'database'],
+      default: 'manual'
+    },
     strength: {
       type: String,
       trim: true,
@@ -89,6 +119,34 @@ const medicineSchema = new mongoose.Schema(
     requires_prescription: {
       type: Boolean,
       default: false
+    },
+    abdm_drug_code: {
+      type: String,
+      default: ''
+    },
+    therapeutic_class: {
+      type: String,
+      default: ''
+    },
+    schedule_classification: {
+      type: String,
+      default: 'OTC'
+    },
+    schedule_warning: {
+      type: String,
+      default: ''
+    },
+    cdsco_approval_status: {
+      type: String,
+      default: ''
+    },
+    storage_guidelines: {
+      type: String,
+      default: ''
+    },
+    dosage_instructions: {
+      type: String,
+      default: ''
     }
   },
   {

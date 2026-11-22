@@ -3,20 +3,15 @@ const ApiResponse = require('../utils/apiResponse');
 
 const getNearbyChemists = async (req, res, next) => {
   try {
-    const { latitude, longitude, radius, limit } = req.query;
-    if (!latitude || !longitude) {
-      return ApiResponse.error(
-        res,
-        'Both latitude and longitude query parameters are required',
-        400,
-        'VALIDATION_ERROR'
-      );
-    }
+    const { latitude, longitude, radius, radiusKm, limit } = req.query;
+    const lat = latitude ? parseFloat(latitude) : 12.9716;
+    const lng = longitude ? parseFloat(longitude) : 77.5946;
+    const rad = radiusKm ? parseFloat(radiusKm) : (radius ? parseFloat(radius) : 10);
 
     const result = await chemistService.getNearbyChemists({
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
-      radius: radius ? parseFloat(radius) : 10,
+      latitude: lat,
+      longitude: lng,
+      radius: rad,
       limit: limit ? parseInt(limit, 10) : 20
     });
 

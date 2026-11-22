@@ -56,6 +56,7 @@ router.get('/nearby', chemistController.getNearbyChemists);
  *         description: Chemists stocking the queried medicine with price and stock count
  */
 router.get('/search', chemistController.searchChemistsWithMedicine);
+router.get('/search-medicine', chemistController.searchChemistsWithMedicine);
 
 /**
  * @openapi

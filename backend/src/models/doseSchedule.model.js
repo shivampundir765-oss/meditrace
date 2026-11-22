@@ -49,6 +49,28 @@ const doseScheduleSchema = new mongoose.Schema(
       enum: FOOD_INSTRUCTIONS,
       default: 'regardless'
     },
+    mealSlots: [
+      {
+        meal: {
+          type: String,
+          enum: ['breakfast', 'lunch', 'dinner', 'bedtime'],
+          required: true
+        },
+        timing: {
+          type: String,
+          enum: ['before_food', 'after_food', 'with_food'],
+          default: 'after_food'
+        },
+        dose_amount: {
+          type: String,
+          default: '1'
+        },
+        do_not_take_note: {
+          type: String,
+          default: ''
+        }
+      }
+    ],
     instructions: {
       type: String,
       trim: true,

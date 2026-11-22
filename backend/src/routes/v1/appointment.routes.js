@@ -51,6 +51,8 @@ router.route('/')
   .post(validate(bookAppointmentSchema), appointmentController.bookAppointment)
   .get(appointmentController.listAppointments);
 
+router.get('/my', appointmentController.listAppointments);
+
 /**
  * @openapi
  * /appointments/{id}:

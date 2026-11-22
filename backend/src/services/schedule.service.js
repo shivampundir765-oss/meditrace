@@ -104,18 +104,68 @@ const getScheduleToday = async (patientId, queryDate) => {
     patient_id: patientId,
     scheduled_time: { $gte: startOfDay, $lte: endOfDay }
   })
-    .populate('medicine_id', 'name generic_name dosage_form strength quantity low_stock_threshold')
-    .populate('schedule_id', 'dose_amount food_instruction instructions')
-    .sort({ scheduled_time: 1 });
+    .populate('medicine_id', 'name nickname generic_name dosage_form strength quantity low_stock_threshold category usedFor description cautions expiry_date')
+    .populate('schedule_id', 'dose_amount food_instruction instructions mealSlots specific_times')
+    .sort({ scheduled_time: 1 })
+    .lean();
+
+  // Helper to determine meal category
+  const determineMeal = (scheduledTime, schedule) => {
+    const d = new Date(scheduledTime);
+    const hours = d.getHours();
+    if (schedule?.mealSlots && schedule.mealSlots.length > 0) {
+      // Find matching mealSlot if time roughly corresponds
+      if (hours < 11) return 'breakfast';
+      if (hours < 16) return 'lunch';
+      if (hours < 21) return 'dinner';
+      return 'bedtime';
+    }
+    if (hours < 11) return 'breakfast';
+    if (hours < 16) return 'lunch';
+    if (hours < 21) return 'dinner';
+    return 'bedtime';
+  };
+
+  const enrichedLogs = logs.map(l => {
+    const meal = determineMeal(l.scheduled_time, l.schedule_id);
+    const med = l.medicine_id || {};
+    let statusLine = 'In stock';
+    let statusColor = 'green';
+    const qty = typeof med.quantity === 'number' ? med.quantity : 0;
+    const threshold = med.low_stock_threshold || 5;
+
+    if (qty <= 0) {
+      statusLine = 'Out of stock';
+      statusColor = 'red';
+    } else if (qty <= threshold) {
+      statusLine = `Low stock (${qty} left)`;
+      statusColor = 'amber';
+    }
+
+    return {
+      ...l,
+      meal,
+      statusLine,
+      statusColor
+    };
+  });
+
+  const byMeal = {
+    breakfast: enrichedLogs.filter(l => l.meal === 'breakfast'),
+    lunch: enrichedLogs.filter(l => l.meal === 'lunch'),
+    dinner: enrichedLogs.filter(l => l.meal === 'dinner'),
+    bedtime: enrichedLogs.filter(l => l.meal === 'bedtime')
+  };
 
   return {
     date: today.toISOString().split('T')[0],
-    totalDoses: logs.length,
-    takenCount: logs.filter(l => l.status === 'taken').length,
-    pendingCount: logs.filter(l => l.status === 'scheduled').length,
-    missedCount: logs.filter(l => l.status === 'missed').length,
-    skippedCount: logs.filter(l => l.status === 'skipped').length,
-    doses: logs
+    totalDoses: enrichedLogs.length,
+    takenCount: enrichedLogs.filter(l => l.status === 'taken').length,
+    pendingCount: enrichedLogs.filter(l => l.status === 'scheduled').length,
+    missedCount: enrichedLogs.filter(l => l.status === 'missed').length,
+    skippedCount: enrichedLogs.filter(l => l.status === 'skipped').length,
+    doses: enrichedLogs,
+    byMeal
   };
 };
 

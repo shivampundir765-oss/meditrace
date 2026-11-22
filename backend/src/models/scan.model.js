@@ -63,7 +63,24 @@ const scanSchema = new mongoose.Schema(
       expiry_date: { type: Date, default: null },
       quantity: { type: Number, default: 10 },
       low_stock_threshold: { type: Number, default: 5 },
-      requires_prescription: { type: Boolean, default: false }
+      requires_prescription: { type: Boolean, default: false },
+      abdm_drug_code: { type: String, default: '' },
+      therapeutic_class: { type: String, default: '' },
+      schedule_classification: { type: String, default: 'OTC' },
+      schedule_warning: { type: String, default: '' },
+      cdsco_approval_status: { type: String, default: '' },
+      storage_guidelines: { type: String, default: '' },
+      dosage_instructions: { type: String, default: '' },
+      nickname: { type: String, default: '' },
+      description: { type: String, default: '' },
+      usedFor: { type: String, default: '' },
+      category: { type: String, default: 'Common' },
+      cautions: { type: String, default: '' },
+      source: { type: String, default: 'scan' }
+    },
+    abdm_registry: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
     }
   },
   {

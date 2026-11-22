@@ -18,6 +18,11 @@ const shopRoutes = require('./shop.routes');
 const cartRoutes = require('./cart.routes');
 const orderRoutes = require('./order.routes');
 const paymentRoutes = require('./payment.routes');
+const abdmRoutes = require('./abdm.routes');
+const placesRoutes = require('./places.routes');
+const catalogRoutes = require('./catalog.routes');
+const nearbyRoutes = require('./nearby.routes');
+const historyRoutes = require('./history.routes');
 
 const router = express.Router();
 
@@ -33,6 +38,11 @@ router.use('/stock', stockRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/scan', scanRoutes);
 router.use('/chemists', chemistRoutes);
+router.use('/places', placesRoutes);
+router.use('/nearby', nearbyRoutes);
+router.use('/catalogs', catalogRoutes);
+router.use('/history', historyRoutes);
+router.use('/abdm', abdmRoutes);
 router.use('/retailer', retailerRoutes);
 router.use('/doctors', doctorRoutes);
 router.use('/appointments', appointmentRoutes);

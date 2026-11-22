@@ -89,6 +89,12 @@ const userSchema = new mongoose.Schema(
       expiryAlerts: { type: Boolean, default: true },
       quietHoursStart: { type: String, default: null }, // "22:00"
       quietHoursEnd: { type: String, default: null }     // "07:00"
+    },
+    meal_times: {
+      breakfast: { type: String, default: '08:00' },
+      lunch: { type: String, default: '13:00' },
+      dinner: { type: String, default: '20:00' },
+      bedtime: { type: String, default: '22:00' }
     }
   },
   {
