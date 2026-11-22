@@ -1,81 +1,68 @@
-# Meditrace Current State & Architecture Summary
+# MediTrace Current Architecture & State (v3)
 
-## 1. System Architecture Overview
+## 1. System Architecture
 
-Meditrace is a comprehensive digital medicine adherence, verification, and healthcare discovery platform consisting of three primary tiers:
+MediTrace is an enterprise full-stack digital medicine adherence, clinical packaging verification, and family healthcare platform composed of:
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                   Client Layer                         │
-│  ┌────────────────────────┐  ┌──────────────────────┐  │
-│  │   React Web Platform   │  │ React Native Mobile  │  │
-│  │   (Vite + Tailwind)    │  │ (Android APK/Hermes) │  │
-│  └───────────┬────────────┘  └──────────┬───────────┘  │
-└──────────────┼──────────────────────────┼──────────────┘
-               │                          │
-               ▼                          ▼
-┌────────────────────────────────────────────────────────┐
-│                   Backend REST API                     │
-│               (Node.js / Express 4.x)                  │
-│                                                        │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  Controllers & Business Logic Services           │  │
-│  │  - Auth & Role-Based Access Control              │  │
-│  │  - Medicine Management & Schedule Tracking       │  │
-│  │  - Scan OCR & ABDM Drug Registry Enrichment      │  │
-│  │  - Google Maps & Overpass Healthcare Locator     │  │
-│  │  - Retailer Hub, Doctor Booking & Test Orders    │  │
-│  └──────────────────────────┬───────────────────────┘  │
-└─────────────────────────────┼──────────────────────────┘
-                              │
-                              ▼
-┌────────────────────────────────────────────────────────┐
-│                   Data Tier                            │
-│  - MongoDB (with Embedded In-Memory Mongo Fallback)    │
-│  - Collections: users, medicines, dose_schedules,      │
-│    dose_logs, abdmdrugs, facilities, retailers,        │
-│    doctors, appointments, orders, notifications        │
-└────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Client Applications                       │
+│  ┌─────────────────────────────┐ ┌─────────────────────────┐ │
+│  │   React Web Platform (Vite) │ │ React Native App        │ │
+│  │   - i18n English & Hindi    │ │ - i18n English & Hindi  │ │
+│  │   - Cabinet & Family Switch │ │ - 5-Tab Bar (Home, Scan,│ │
+│  │   - Floating AI Chatbot     │ │   Medicines, Nearby,    │ │
+│  │   - 2-Sided Strip Scanner   │ │   Profile)              │ │
+│  │   - Monthly Dose Calendar   │ │ - Floating AI Chatbot   │ │
+│  └──────────────┬──────────────┘ └───────────┬─────────────┘ │
+└─────────────────┼────────────────────────────┼───────────────┘
+                  │                            │
+                  ▼                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  Backend REST API Service                    │
+│                   (Node.js / Express 4)                      │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Middleware & Utilities                                 │  │
+│  │ - Role-based Auth (Patient, Pharmacist, Doctor, Admin) │  │
+│  │ - Profile Scope Resolver (Active Family Profile)       │  │
+│  │ - Audit Stamp Helper (Time, TZ, Lat/Lng/Address)       │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Core Feature Services                                  │  │
+│  │ 1. Cabinet Management (Renamed from Catalog)           │  │
+│  │ 2. Dual-Photo OCR & DrugInfoProvider                   │  │
+│  │ 3. Stock Tracking (In Stock, Few Left, Out of Stock)   │  │
+│  │ 4. Scoped AI Chatbot with Backend Tool Calling         │  │
+│  │ 5. Immutable Append-Only Medicine Revisions            │  │
+│  │ 6. Monthly Dose Calendar & Missed Dose Job             │  │
+│  │ 7. Family Mode Multi-Profile Isolation                 │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│                         Data Tier                            │
+│  - MongoDB (with Embedded MongoMemoryServer Zero-Config)     │
+│  - Collections: users, profiles, cabinets, cabinet_medicines,│
+│    medicines, medicine_revisions, dose_schedules, dose_logs, │
+│    chat_messages, abdmdrugs, facilities, retailers           │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## 2. Codebase Structure
+## 2. Key Architectural Upgrades in v3
 
-- `/backend`:
-  - `src/server.js`: HTTP server entry point, connects DB, initializes cron jobs, starts on port 5000.
-  - `src/app.js`: Express app setup, CORS, Helmet, rate limiting, request logging, error handler.
-  - `src/config/db.js`: Hybrid MongoDB connection; connects to local MongoDB or spins up `mongodb-memory-server` with auto-seeding.
-  - `src/models/`: Mongoose models for User, Medicine, DoseSchedule, DoseLog, Scan, Notification, Retailer, Doctor, Appointment, Order, AbdmDrug, Facility.
-  - `src/routes/v1/`: Versioned API endpoints mounted under `/api/v1/` (auth, users, medicines, schedule, dose, scan, stock, notifications, chemists, doctors, appointments, shop, orders, retailer, admin, abdm, places).
-  - `src/services/`: Core logic including OCR/ABDM scan enrichment (`scan.service.js`), ABDM drug registry (`abdm.service.js`), healthcare place locator (`facility.service.js`), notification service.
-- `/web`:
-  - React 18 SPA built with Vite and Tailwind CSS.
-  - Client state and routing managed via React Router v6.
-  - Pages: HomePage (Dashboard), ScanPage, CabinetPage, ChemistFinderPage, DoctorsPage, ShopPage, CartPage, OrdersPage, ProfilePage, RetailerDashboardPage, AdminPage, LoginPage, RegisterPage.
-  - Common components: Navbar, Footer, MeditraceLogo, GoogleHealthcareMap.
-- `/mobile`:
-  - React Native application targeting Android with Hermes engine and Expo modules.
-  - Core navigation stack with screens: AuthScreen, HomeScreen, CabinetScreen, ScanScreen, ScheduleScreen, ChemistShopScreen.
-- `/docs`:
-  - Architecture, API specifications, and quality assurance logs.
-
-## 3. Existing Features
-
-1. **Authentication & Multi-Role Authorization**:
-   - JWT access tokens + refresh tokens.
-   - Roles: Patient, Doctor, Retailer, Admin with protected route guards.
-2. **Medicine Inventory & Schedule**:
-   - Tracking medicines, batch codes, expiry dates, stock quantities, dosage instructions.
-   - Today's dose schedule with mark taken/skipped actions.
-3. **Smart Medicine Scan & ABDM Registry**:
-   - Strip image OCR and barcode lookup.
-   - ABDM Drug Registry lookup returning CDSCO approval status, Indian brand names, generic formulations, and statutory Schedule H/H1 warnings.
-4. **Healthcare & Pharmacy Locator**:
-   - Interactive Google Maps integration with custom markers and attribution.
-   - Locates registered retailers with real-time medicine inventory, as well as nearby hospitals and pharmacies within user-selected radius (1, 3, 5, 10, 25 km).
-5. **Doctor Consultations & Appointments**:
-   - Search doctor directory by specialization and book appointment slots.
-6. **Shop & Order Flow**:
-   - Medicine search, cart management, simulated checkout, and order history.
-7. **Retailer & Admin Portals**:
-   - Retailer inventory and order fulfillment management.
-   - Admin user management and system health monitoring.
+1. **Role Standard**:
+   - Explicit system roles: `patient`, `pharmacist`, `doctor`, `admin`.
+2. **Family Profiles & Multi-User Isolation**:
+   - Every health record (cabinet, medicine, dose log, schedule, prescription) is scoped by `profile_id`.
+   - Access control levels: `owner`, `caregiver_edit`, `caregiver_view`.
+3. **Terminology Normalization**:
+   - Full migration of legacy `catalog` entities to `Cabinet` across API routes, database schemas, and client UI.
+4. **Append-Only Clinical Audit Revisions**:
+   - Revision 1 preserves original Pharmacist/Doctor entry.
+   - Subsequent user edits append immutable revision records with audit stamps.
+5. **National Drug Database Provider (DrugInfoProvider)**:
+   - Configurable drug provider interface with local ABDM/CDSCO official registry matching, fallback to OpenFDA/RxNorm.
+6. **Scoped AI Chatbot**:
+   - Backend function calling only, strictly isolated to logged-in user's active profile, medical disclaimer enforcement, emergency symptom escalation.

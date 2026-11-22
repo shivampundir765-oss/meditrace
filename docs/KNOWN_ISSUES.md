@@ -1,33 +1,19 @@
-# Meditrace Known Issues & Resolution Log
+# MediTrace Known Issues & Migration Tracking
 
-## 1. Resolved Issues
+## 1. Resolved in v2
+- MongoDB offline crash resolved with automatic `mongodb-memory-server` fallback.
+- Unified Axios response interceptor for clean handling of `.data` properties.
+- Appointment `/my` vs `/:id` route collision fixed.
 
-1. **MongoDB Service Unavailability in Standalone Environments**:
-   - **Symptom**: Backend crashed on startup when local MongoDB daemon was not running.
-   - **Fix**: Integrated embedded `mongodb-memory-server` in `backend/src/config/db.js` as an automatic zero-config fallback with automated test data seeding.
-2. **Axios Response Interceptor Shape Mismatch**:
-   - **Symptom**: `TypeError: Cannot read properties of undefined` occurred across multiple frontend pages (`DoctorsPage`, `ShopPage`, `AdminPage`) where pages expected either `res.data.data.*` or `res.data.*`.
-   - **Fix**: Updated `web/src/api/client.js` with a self-referencing non-enumerable `.data` getter property on the unwrapped response object, enabling both access patterns transparently.
-3. **Route Shadowing in Appointment Routes**:
-   - **Symptom**: Accessing `/api/v1/appointments/my` threw a Mongoose `CastError: Cast to ObjectId failed for value "my"` because `/:id` was matched before `/my`.
-   - **Fix**: Reordered route definitions in `backend/src/routes/v1/appointment.routes.js` so `/my` is registered before `/:id`.
-4. **Android Hermes Release Bundle Parsing Syntax**:
-   - **Symptom**: Metro JS bundler during `assembleRelease` failed with `Unexpected keyword 'export'` inside `mobile/src/api/client.js`.
-   - **Fix**: Restructured module export declarations to adhere strictly to React Native Hermes CommonJS/ES module requirements.
-
-## 2. Active Focus for v2 Release
-
-1. **Medicine Classification & Clinical Details**:
-   - Need comprehensive Indian medicine classification (Common, Chronic, Serious) with purpose ("Used for"), form/strength description, and food-related cautions ("Take after food", "May cause drowsiness") on all medicine cards.
-2. **Catalog Architecture & Meal-Based Dose Slots**:
-   - Transitioning from raw clock times to human-friendly catalogs (Morning, Afternoon, Evening, Night) with meal timing slots (Breakfast, Lunch, Dinner, Bedtime; before/after food).
-3. **Nickname & Quick Reference Support**:
-   - Allowing patients to assign intuitive nicknames ("Headache", "Leg pain", "Blood pressure") with suggestion chips and dual-field search across catalog and cabinet.
-4. **Time-Wise Sections with Reactive Stock & Expiry Alerts**:
-   - Categorized card presentation on dashboard with visual progress indicators, immediate out-of-stock and low-stock replenishment shortcuts, and automatic stock deduction upon marking doses taken.
-5. **7-Day Intake Adherence Matrix & Export**:
-   - Interactive matrix view (Taken, Missed, Partly taken, Not scheduled, Upcoming) with late dose marking capabilities, weekly adherence metrics, and PDF export functionality.
-6. **Unified Nearby Healthcare Discoverer**:
-   - Refined Chemists & Hospitals views with dual tabs, live device geolocation, typed postal/city fallback, and 1-tap Google Maps turn-by-turn routing.
-7. **Clean Shared Medical Teal Design System**:
-   - Unified color tokens, loading skeletons, responsive layouts, 5-tab mobile navigation, and global error boundaries on both Web and Mobile.
+## 2. In-Flight Upgrades for v3
+1. **Terminology Migration**:
+   - Legacy routes `/api/v1/catalogs` must be migrated to `/api/v1/cabinets` with backward compatibility redirect/alias to prevent any client breaking change.
+   - Collections: `catalogs` -> `cabinets`, `catalog_medicines` -> `cabinet_medicines`.
+2. **Profile Scoping**:
+   - Legacy records currently lack `profile_id`. A database migration script must generate a default Self profile for every user and backfill `profile_id` on all medicines, cabinets, prescriptions, schedules, and dose logs.
+3. **Roles Alignment**:
+   - Align legacy `retailer` role to `pharmacist` role seamlessly in user schemas and auth middleware.
+4. **Append-Only Revisions**:
+   - Medicines must enforce `medicine_revisions` records on all write and edit paths, locking revision 1 against mutation.
+5. **Leaving Scan Guard**:
+   - Browser beforeunload + React navigation interceptors + expo-av / Web Audio API tone synthesis to sound a warning beep and display the leave confirmation dialog.
